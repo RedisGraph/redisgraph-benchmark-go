@@ -69,7 +69,7 @@ func main() {
 	rps := flag.Int64("rps", 0, "Max rps. If 0 no limit is applied and the DB is stressed up to maximum.")
 	password := flag.String("a", "", "Password for Redis Auth.")
 	clients := flag.Uint64("c", 50, "number of clients.")
-	numberRequests := flag.Uint64("n", 100000, "Total number of requests")
+	numberRequests := flag.Uint64("n", 1000000, "Total number of requests")
 	debug := flag.Int("debug", 0, "Client debug level.")
 	loop := flag.Bool("l", false, "Loop. Run the tests forever.")
 	graphKey := flag.String("graph-key", "graph", "graph key.")
