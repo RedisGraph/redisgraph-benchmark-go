@@ -1,8 +1,8 @@
 package main
 
 import (
+	rg "github.com/RedisGraph/redisgraph-go"
 	"github.com/gomodule/redigo/redis"
-	rg "github.com/redislabs/redisgraph-go"
 	"log"
 )
 

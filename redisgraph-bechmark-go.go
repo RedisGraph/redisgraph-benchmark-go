@@ -4,8 +4,7 @@ import (
 	"flag"
 	"fmt"
 	hdrhistogram "github.com/HdrHistogram/hdrhistogram-go"
-	"github.com/mediocregopher/radix/v3"
-	"github.com/redislabs/redisgraph-go"
+	"github.com/RedisGraph/redisgraph-go"
 	"golang.org/x/time/rate"
 	"log"
 	"math"
@@ -62,7 +61,7 @@ func sendCmdLogic(rg redisgraph.Graph, query string, continueOnError bool, debug
 			log.Fatalf("Received an error with the following query(s): %v, error: %v", query, err)
 		}
 	} else {
-		err = graphRunTimeLatencies.RecordValue(int64(queryResult.RunTime() * 1000))
+		err = graphRunTimeLatencies.RecordValue(int64(queryResult.InternalExecutionTime() * 1000.0))
 		if err != nil {
 			log.Fatalf("Received an error while recording RedisGraph RunTime latencies: %v", err)
 		}
@@ -92,7 +91,7 @@ func main() {
 	host := flag.String("h", "127.0.0.1", "Server hostname.")
 	port := flag.Int("p", 6379, "Server port.")
 	rps := flag.Int64("rps", 0, "Max rps. If 0 no limit is applied and the DB is stressed up to maximum.")
-	password := flag.String("a", "", "Password for Redis Auth.")
+	//password := flag.String("a", "", "Password for Redis Auth.")
 	clients := flag.Uint64("c", 50, "number of clients.")
 	numberRequests := flag.Uint64("n", 1000000, "Total number of requests")
 	debug := flag.Int("debug", 0, "Client debug level.")
@@ -119,10 +118,6 @@ func main() {
 	client_update_tick := 1
 	latencies = hdrhistogram.New(1, 90000000, 3)
 	graphRunTimeLatencies = hdrhistogram.New(1, 90000000, 3)
-	opts := make([]radix.DialOpt, 0)
-	if *password != "" {
-		opts = append(opts, radix.DialAuthPass(*password))
-	}
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
 	stopChan := make(chan struct{})
 	// a WaitGroup for the goroutines to tell us they've stopped
