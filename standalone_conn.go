@@ -12,5 +12,8 @@ func getStandaloneConn(graphName, network, addr string) rg.Graph {
 		log.Fatalf("Error preparing for benchmark, while creating new connection. error = %v", err)
 	}
 	graph := rg.GraphNew(graphName, conn)
+	// retrieve properties and labels prior benchmark ( if any )
+	graph.PropertyKeys()
+	graph.Labels()
 	return graph
 }
