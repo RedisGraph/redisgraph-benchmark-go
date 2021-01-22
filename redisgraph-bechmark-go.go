@@ -18,7 +18,16 @@ import (
 )
 
 var totalCommands uint64
+var totalEmptyResultsets uint64
 var totalErrors uint64
+
+var totalNodesCreated uint64
+var totalNodesDeleted uint64
+var totalLabelsAdded uint64
+var totalPropertiesSet uint64
+var totalRelationshipsCreated uint64
+var totalRelationshipsDeleted uint64
+
 var latencies *hdrhistogram.Histogram
 var graphRunTimeLatencies *hdrhistogram.Histogram
 
@@ -41,6 +50,8 @@ func sendCmdLogic(rg redisgraph.Graph, query string, continueOnError bool, debug
 	startT := time.Now()
 	queryResult, err = rg.Query(query)
 	endT := time.Now()
+	atomic.AddUint64(&totalCommands, uint64(1))
+	duration := endT.Sub(startT)
 	if err != nil {
 		if continueOnError {
 			atomic.AddUint64(&totalErrors, uint64(1))
@@ -50,17 +61,31 @@ func sendCmdLogic(rg redisgraph.Graph, query string, continueOnError bool, debug
 		} else {
 			log.Fatalf("Received an error with the following query(s): %v, error: %v", query, err)
 		}
+	} else {
+		err = graphRunTimeLatencies.RecordValue(int64(queryResult.RunTime() * 1000))
+		if err != nil {
+			log.Fatalf("Received an error while recording RedisGraph RunTime latencies: %v", err)
+		}
+		if debug_level > 1 {
+			fmt.Printf("Issued query: %s\n", query)
+			fmt.Printf("Pretty printing result:\n")
+			queryResult.PrettyPrint()
+			fmt.Printf("\n")
+		}
+		if queryResult.Empty() {
+			atomic.AddUint64(&totalEmptyResultsets, uint64(1))
+		}
+		atomic.AddUint64(&totalNodesCreated, uint64(queryResult.NodesCreated()))
+		atomic.AddUint64(&totalNodesDeleted, uint64(queryResult.NodesDeleted()))
+		atomic.AddUint64(&totalLabelsAdded, uint64(queryResult.LabelsAdded()))
+		atomic.AddUint64(&totalPropertiesSet, uint64(queryResult.PropertiesSet()))
+		atomic.AddUint64(&totalRelationshipsCreated, uint64(queryResult.RelationshipsCreated()))
+		atomic.AddUint64(&totalRelationshipsDeleted, uint64(queryResult.RelationshipsDeleted()))
 	}
-	duration := endT.Sub(startT)
 	err = latencies.RecordValue(duration.Microseconds())
 	if err != nil {
 		log.Fatalf("Received an error while recording latencies: %v", err)
 	}
-	err = graphRunTimeLatencies.RecordValue(int64(queryResult.RunTime() * 1000))
-	if err != nil {
-		log.Fatalf("Received an error while recording RedisGraph RunTime latencies: %v", err)
-	}
-	atomic.AddUint64(&totalCommands, uint64(1))
 }
 
 func main() {
@@ -78,6 +103,7 @@ func main() {
 	if len(args) < 1 {
 		log.Fatalf("You need to specify a query after the flag command arguments.")
 	}
+	fmt.Printf("Debug level: %d.\n", *debug)
 
 	var requestRate = Inf
 	var requestBurst = 1
@@ -112,7 +138,7 @@ func main() {
 		wg.Add(1)
 		cmd := make([]string, len(args))
 		copy(cmd, args)
-		go ingestionRoutine(getStandaloneConn(*graphKey, "tcp", connectionStr), true, query, samplesPerClient, *loop, int(*debug), &wg, useRateLimiter, rateLimiter)
+		go ingestionRoutine(getStandaloneConn(*graphKey, "tcp", connectionStr), true, query, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter)
 	}
 
 	// listen for C-c
@@ -131,13 +157,22 @@ func main() {
 	graph_p99IngestionMs := float64(graphRunTimeLatencies.ValueAtQuantile(99.0)) / 1000.0
 
 	fmt.Printf("\n")
-	fmt.Printf("#################################################\n")
+	fmt.Printf("################# RUNTIME STATS #################\n")
 	fmt.Printf("Total Duration %.3f Seconds\n", duration.Seconds())
-	fmt.Printf("Total Errors %d\n", totalErrors)
+	fmt.Printf("Total Commands issued %d\n", totalCommands)
+	fmt.Printf("Total Errors %d ( %3.3f %%)\n", totalErrors, float64(totalErrors/totalCommands*100.0))
 	fmt.Printf("Throughput summary: %.0f requests per second\n", messageRate)
 	fmt.Printf("Overall Client Latency summary (msec):\n")
 	fmt.Printf("    %9s %9s %9s\n", "p50", "p95", "p99")
 	fmt.Printf("    %9.3f %9.3f %9.3f\n", p50IngestionMs, p95IngestionMs, p99IngestionMs)
+	fmt.Printf("################## GRAPH STATS ##################\n")
+	fmt.Printf("Total Empty resultsets %d ( %3.3f %%)\n", totalEmptyResultsets, float64(totalEmptyResultsets/totalCommands*100.0))
+	fmt.Printf("Total Nodes created %d\n", totalNodesCreated)
+	fmt.Printf("Total Nodes deleted %d\n", totalNodesDeleted)
+	fmt.Printf("Total Labels added %d\n", totalLabelsAdded)
+	fmt.Printf("Total Properties set %d\n", totalPropertiesSet)
+	fmt.Printf("Total Relationships created %d\n", totalRelationshipsCreated)
+	fmt.Printf("Total Relationships deleted %d\n", totalRelationshipsDeleted)
 	fmt.Printf("Overall RedisGraph Internal Execution time Latency summary (msec):\n")
 	fmt.Printf("    %9s %9s %9s\n", "p50", "p95", "p99")
 	fmt.Printf("    %9.3f %9.3f %9.3f\n", graph_p50IngestionMs, graph_p95IngestionMs, graph_p99IngestionMs)
