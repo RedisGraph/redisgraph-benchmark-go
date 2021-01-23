@@ -8,8 +8,8 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 
-.PHONY: all test coverage
-all: test coverage build
+.PHONY: all test coverage build checkfmt lint fmt
+all: test coverage build checkfmt lint fmt
 
 build:
 	$(GOBUILD) .
@@ -27,6 +27,9 @@ lint:
 	$(GOGET) github.com/golangci/golangci-lint/cmd/golangci-lint
 	golangci-lint run
 
+fmt:
+	$(GOFMT) ./...
+
 get:
 	$(GOGET) -t -v ./...
 
@@ -37,12 +40,7 @@ test: get
 coverage: get test
 	$(GOTEST) -race -coverprofile=coverage.txt -covermode=atomic .
 
-
 release:
 	$(GOGET) github.com/mitchellh/gox
 	$(GOGET) github.com/tcnksm/ghr
 	GO111MODULE=on gox  -osarch "linux/amd64 darwin/amd64" -output "dist/redisgraph-benchmark-go_{{.OS}}_{{.Arch}}" .
-
-fmt:
-	$(GOFMT) ./...
-

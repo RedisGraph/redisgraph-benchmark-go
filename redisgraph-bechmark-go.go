@@ -5,6 +5,7 @@ import (
 	"fmt"
 	hdrhistogram "github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/RedisGraph/redisgraph-go"
+	"github.com/gomodule/redigo/redis"
 	"golang.org/x/time/rate"
 	"log"
 	"math"
@@ -32,14 +33,14 @@ var graphRunTimeLatencies *hdrhistogram.Histogram
 
 const Inf = rate.Limit(math.MaxFloat64)
 
-func ingestionRoutine(rg redisgraph.Graph, continueOnError bool, cmdS string, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter) {
+func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS string, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter) {
 	defer wg.Done()
 	for i := 0; uint64(i) < number_samples || loop; i++ {
 		sendCmdLogic(rg, cmdS, continueOnError, debug_level, useLimiter, rateLimiter)
 	}
 }
 
-func sendCmdLogic(rg redisgraph.Graph, query string, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter) {
+func sendCmdLogic(rg *redisgraph.Graph, query string, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter) {
 	if useRateLimiter {
 		r := rateLimiter.ReserveN(time.Now(), int(1))
 		time.Sleep(r.Delay())
@@ -128,12 +129,15 @@ func main() {
 		fmt.Printf("Running in loop until you hit Ctrl+C\n")
 	}
 	query := strings.Join(args, " ")
+	rgs := make([]redisgraph.Graph, *clients, *clients)
+	conns := make([]redis.Conn, *clients, *clients)
 
-	for channel_id := 1; uint64(channel_id) <= *clients; channel_id++ {
+	for client_id := 0; uint64(client_id) < *clients; client_id++ {
 		wg.Add(1)
 		cmd := make([]string, len(args))
 		copy(cmd, args)
-		go ingestionRoutine(getStandaloneConn(*graphKey, "tcp", connectionStr), true, query, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter)
+		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr)
+		go ingestionRoutine(&rgs[client_id], true, query, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter)
 	}
 
 	// listen for C-c
@@ -141,7 +145,14 @@ func main() {
 	signal.Notify(c, os.Interrupt)
 
 	tick := time.NewTicker(time.Duration(client_update_tick) * time.Second)
+
+	// enter the update loop
 	closed, _, duration, totalMessages, _ := updateCLI(tick, c, *numberRequests, *loop)
+
+	// benchmarked ended, close the connections
+	for _, standaloneConn := range conns {
+		standaloneConn.Close()
+	}
 	messageRate := float64(totalMessages) / float64(duration.Seconds())
 	p50IngestionMs := float64(latencies.ValueAtQuantile(50.0)) / 1000.0
 	p95IngestionMs := float64(latencies.ValueAtQuantile(95.0)) / 1000.0
