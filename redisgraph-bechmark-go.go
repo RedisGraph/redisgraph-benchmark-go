@@ -102,7 +102,7 @@ func main() {
 	host := flag.String("h", "127.0.0.1", "Server hostname.")
 	port := flag.Int("p", 6379, "Server port.")
 	rps := flag.Int64("rps", 0, "Max rps. If 0 no limit is applied and the DB is stressed up to maximum.")
-	//password := flag.String("a", "", "Password for Redis Auth.")
+	password := flag.String("a", "", "Password for Redis Auth.")
 	clients := flag.Uint64("c", 50, "number of clients.")
 	numberRequests := flag.Uint64("n", 1000000, "Total number of requests")
 	debug := flag.Int("debug", 0, "Client debug level.")
@@ -148,7 +148,7 @@ func main() {
 		wg.Add(1)
 		cmd := make([]string, len(args))
 		copy(cmd, args)
-		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr)
+		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
 		go ingestionRoutine(&rgs[client_id], true, query, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter)
 	}
 
