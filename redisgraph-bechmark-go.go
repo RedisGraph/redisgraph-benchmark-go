@@ -29,7 +29,9 @@ var totalRelationshipsCreated uint64
 var totalRelationshipsDeleted uint64
 
 var latencies *hdrhistogram.Histogram
+var instantLatencies *hdrhistogram.Histogram
 var graphRunTimeLatencies *hdrhistogram.Histogram
+var instantGraphRunTimeLatencies *hdrhistogram.Histogram
 
 const Inf = rate.Limit(math.MaxFloat64)
 
@@ -64,7 +66,11 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, continueOnError bool, debu
 	} else {
 		err = graphRunTimeLatencies.RecordValue(int64(queryResult.InternalExecutionTime() * 1000.0))
 		if err != nil {
-			log.Fatalf("Received an error while recording RedisGraph RunTime latencies: %v", err)
+			log.Fatalf("Received an error while recording RedisGraph InternalExecutionTime latencies: %v", err)
+		}
+		err = instantGraphRunTimeLatencies.RecordValue(int64(queryResult.InternalExecutionTime() * 1000.0))
+		if err != nil {
+			log.Fatalf("Received an error while recording RedisGraph instant (last sec ) InternalExecutionTime latencies: %v", err)
 		}
 		if debug_level > 1 {
 			fmt.Printf("Issued query: %s\n", query)
@@ -83,6 +89,10 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, continueOnError bool, debu
 		atomic.AddUint64(&totalRelationshipsDeleted, uint64(queryResult.RelationshipsDeleted()))
 	}
 	err = latencies.RecordValue(duration.Microseconds())
+	if err != nil {
+		log.Fatalf("Received an error while recording latencies: %v", err)
+	}
+	err = instantLatencies.RecordValue(duration.Microseconds())
 	if err != nil {
 		log.Fatalf("Received an error while recording latencies: %v", err)
 	}
@@ -118,7 +128,9 @@ func main() {
 	samplesPerClient := *numberRequests / *clients
 	client_update_tick := 1
 	latencies = hdrhistogram.New(1, 90000000, 3)
+	instantLatencies = hdrhistogram.New(1, 90000000, 3)
 	graphRunTimeLatencies = hdrhistogram.New(1, 90000000, 3)
+	instantGraphRunTimeLatencies = hdrhistogram.New(1, 90000000, 3)
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
 	stopChan := make(chan struct{})
 	// a WaitGroup for the goroutines to tell us they've stopped
@@ -199,7 +211,7 @@ func updateCLI(tick *time.Ticker, c chan os.Signal, message_limit uint64, loop b
 	prevTime := time.Now()
 	prevMessageCount := uint64(0)
 	messageRateTs := []float64{}
-	fmt.Printf("%26s %7s %25s %25s %7s %25s %25s %25s\n", "Test time", " ", "Total Commands", "Total Errors", "", "Command Rate", "Client p50 with RTT(ms)", "Graph Internal p50 with RTT(ms)")
+	fmt.Printf("%26s %7s %25s %25s %7s %25s %25s %26s\n", "Test time", " ", "Total Commands", "Total Errors", "", "Command Rate", "Client p50 with RTT(ms)", "Graph Internal Time p50 (ms)")
 	for {
 		select {
 		case <-tick.C:
@@ -216,7 +228,10 @@ func updateCLI(tick *time.Ticker, c chan os.Signal, message_limit uint64, loop b
 
 				p50 := float64(latencies.ValueAtQuantile(50.0)) / 1000.0
 				p50RunTimeGraph := float64(graphRunTimeLatencies.ValueAtQuantile(50.0)) / 1000.0
-
+				instantP50 := float64(instantLatencies.ValueAtQuantile(50.0)) / 1000.0
+				instantP50RunTimeGraph := float64(instantGraphRunTimeLatencies.ValueAtQuantile(50.0)) / 1000.0
+				instantGraphRunTimeLatencies.Reset()
+				instantLatencies.Reset()
 				if prevMessageCount == 0 && totalCommands != 0 {
 					start = time.Now()
 				}
@@ -226,7 +241,7 @@ func updateCLI(tick *time.Ticker, c chan os.Signal, message_limit uint64, loop b
 				prevMessageCount = totalCommands
 				prevTime = now
 
-				fmt.Printf("%25.0fs %s %25d %25d [%3.1f%%] %25.2f %25.3f %25.3f\t", time.Since(start).Seconds(), completionPercentStr, totalCommands, totalErrors, errorPercent, messageRate, p50, p50RunTimeGraph)
+				fmt.Printf("%25.0fs %s %25d %25d [%3.1f%%] %25.2f %19.3f (%3.3f) %20.3f (%3.3f)\t", time.Since(start).Seconds(), completionPercentStr, totalCommands, totalErrors, errorPercent, messageRate, instantP50, p50, instantP50RunTimeGraph, p50RunTimeGraph)
 				fmt.Printf("\r")
 				if message_limit > 0 && totalCommands >= uint64(message_limit) && !loop {
 					return true, start, time.Since(start), totalCommands, messageRateTs

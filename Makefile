@@ -8,8 +8,8 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 
-.PHONY: all test coverage build checkfmt lint fmt
-all: test coverage build checkfmt lint fmt
+.PHONY: all test coverage build checkfmt fmt
+all: test coverage build checkfmt fmt
 
 build:
 	$(GOBUILD) .
