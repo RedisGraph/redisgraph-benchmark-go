@@ -127,10 +127,10 @@ func main() {
 	var rateLimiter = rate.NewLimiter(requestRate, requestBurst)
 	samplesPerClient := *numberRequests / *clients
 	client_update_tick := 1
-	latencies = hdrhistogram.New(1, 90000000, 3)
-	instantLatencies = hdrhistogram.New(1, 90000000, 3)
-	graphRunTimeLatencies = hdrhistogram.New(1, 90000000, 3)
-	instantGraphRunTimeLatencies = hdrhistogram.New(1, 90000000, 3)
+	latencies = hdrhistogram.New(1, 90000000000, 3)
+	instantLatencies = hdrhistogram.New(1, 90000000000, 3)
+	graphRunTimeLatencies = hdrhistogram.New(1, 90000000000, 3)
+	instantGraphRunTimeLatencies = hdrhistogram.New(1, 90000000000, 3)
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
 	stopChan := make(chan struct{})
 	// a WaitGroup for the goroutines to tell us they've stopped
