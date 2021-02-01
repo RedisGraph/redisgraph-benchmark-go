@@ -17,7 +17,7 @@ redisgraph-benchmark-go
 coverage.txt
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+ vendor/
 
 # Go sum
 go.sum
