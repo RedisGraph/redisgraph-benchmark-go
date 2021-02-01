@@ -9,6 +9,9 @@ redisgraph-benchmark-go
 # Test binary, built with `go test -c`
 *.test
 
+# dist folder
+#dist
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 coverage.txt

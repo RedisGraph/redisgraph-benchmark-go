@@ -7,7 +7,7 @@ import (
 )
 
 func getStandaloneConn(graphName, network, addr string, password string) (graph rg.Graph, conn redis.Conn) {
-	var err error = nil
+	var err error
 	if password != "" {
 		conn, err = redis.Dial(network, addr, redis.DialPassword(password))
 	} else {
@@ -16,6 +16,5 @@ func getStandaloneConn(graphName, network, addr string, password string) (graph 
 	if err != nil {
 		log.Fatalf("Error preparing for benchmark, while creating new connection. error = %v", err)
 	}
-	graph = rg.GraphNew(graphName, conn)
-	return graph, conn
+	return rg.GraphNew(graphName, conn), conn
 }

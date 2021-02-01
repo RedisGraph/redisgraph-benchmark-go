@@ -1,18 +1,23 @@
 # Go parameters
 GOCMD=GO111MODULE=on go
 GOBUILD=$(GOCMD) build
+GOBUILDRACE=$(GOCMD) build -race
 GOINSTALL=$(GOCMD) install
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
+BIN_NAME=redisgraph-benchmark-go
 
 .PHONY: all test coverage build checkfmt fmt
 all: test coverage build checkfmt fmt
 
 build:
 	$(GOBUILD) .
+
+build-race:
+	$(GOBUILDRACE) .
 
 checkfmt:
 	@echo 'Checking gofmt';\
@@ -39,6 +44,9 @@ test: get
 
 coverage: get test
 	$(GOTEST) -race -coverprofile=coverage.txt -covermode=atomic .
+
+flow-test: build-race
+	./$(BIN_NAME) -n 100000 -query "CREATE(n)" -query-ratio 1 -query "MATCH (n) RETURN n LIMIT 1" -query-ratio 2
 
 release:
 	$(GOGET) github.com/mitchellh/gox
