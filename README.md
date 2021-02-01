@@ -10,8 +10,8 @@ The easiest way to get and install the redisgraph-benchmark-go Go program is to 
 `go get` and then `go install`:
 ```bash
 # Fetch this repo
-go get github.com/filipecosta90/redisgraph-benchmark-go
-cd $GOPATH/src/github.com/filipecosta90/redisgraph-benchmark-go
+go get github.com/RedisGraph/redisgraph-benchmark-go
+cd $GOPATH/src/github.com/RedisGraph/redisgraph-benchmark-go
 make
 ```
 

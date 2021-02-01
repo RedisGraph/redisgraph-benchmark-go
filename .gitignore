@@ -21,3 +21,6 @@ go.sum
 
 # IDE
 .idea
+
+# benchmark results
+*.json
