@@ -1,0 +1,34 @@
+# Golang CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-go/ for more details
+version: 2.1
+
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.14
+      
+      - image: redislabs/redisgraph:edge
+
+    working_directory: /go/src/github.com/RedisGraph/redisgraph-benchmark-go
+    steps:
+      - checkout
+      - run: make test
+      - run: make flow-test
+      - run: bash <(curl -s https://codecov.io/bash)
+      
+workflows:
+  version: 2
+  commit:
+    jobs:
+      - build
+  nightly:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+    jobs:
+      - build

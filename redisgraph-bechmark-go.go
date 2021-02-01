@@ -3,100 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	hdrhistogram "github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/RedisGraph/redisgraph-go"
 	"github.com/gomodule/redigo/redis"
 	"golang.org/x/time/rate"
 	"log"
-	"math"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
-
-var totalCommands uint64
-var totalEmptyResultsets uint64
-var totalErrors uint64
-
-var totalNodesCreated uint64
-var totalNodesDeleted uint64
-var totalLabelsAdded uint64
-var totalPropertiesSet uint64
-var totalRelationshipsCreated uint64
-var totalRelationshipsDeleted uint64
-
-var latencies *hdrhistogram.Histogram
-var instantLatencies *hdrhistogram.Histogram
-var graphRunTimeLatencies *hdrhistogram.Histogram
-var instantGraphRunTimeLatencies *hdrhistogram.Histogram
-
-const Inf = rate.Limit(math.MaxFloat64)
-
-func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS string, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter) {
-	defer wg.Done()
-	for i := 0; uint64(i) < number_samples || loop; i++ {
-		sendCmdLogic(rg, cmdS, continueOnError, debug_level, useLimiter, rateLimiter)
-	}
-}
-
-func sendCmdLogic(rg *redisgraph.Graph, query string, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter) {
-	if useRateLimiter {
-		r := rateLimiter.ReserveN(time.Now(), int(1))
-		time.Sleep(r.Delay())
-	}
-	var err error
-	var queryResult *redisgraph.QueryResult
-	startT := time.Now()
-	queryResult, err = rg.Query(query)
-	endT := time.Now()
-	atomic.AddUint64(&totalCommands, uint64(1))
-	duration := endT.Sub(startT)
-	if err != nil {
-		if continueOnError {
-			atomic.AddUint64(&totalErrors, uint64(1))
-			if debug_level > 0 {
-				log.Println(fmt.Sprintf("Received an error with the following query(s): %v, error: %v", query, err))
-			}
-		} else {
-			log.Fatalf("Received an error with the following query(s): %v, error: %v", query, err)
-		}
-	} else {
-		err = graphRunTimeLatencies.RecordValue(int64(queryResult.InternalExecutionTime() * 1000.0))
-		if err != nil {
-			log.Fatalf("Received an error while recording RedisGraph InternalExecutionTime latencies: %v", err)
-		}
-		err = instantGraphRunTimeLatencies.RecordValue(int64(queryResult.InternalExecutionTime() * 1000.0))
-		if err != nil {
-			log.Fatalf("Received an error while recording RedisGraph instant (last sec ) InternalExecutionTime latencies: %v", err)
-		}
-		if debug_level > 1 {
-			fmt.Printf("Issued query: %s\n", query)
-			fmt.Printf("Pretty printing result:\n")
-			queryResult.PrettyPrint()
-			fmt.Printf("\n")
-		}
-		if queryResult.Empty() {
-			atomic.AddUint64(&totalEmptyResultsets, uint64(1))
-		}
-		atomic.AddUint64(&totalNodesCreated, uint64(queryResult.NodesCreated()))
-		atomic.AddUint64(&totalNodesDeleted, uint64(queryResult.NodesDeleted()))
-		atomic.AddUint64(&totalLabelsAdded, uint64(queryResult.LabelsAdded()))
-		atomic.AddUint64(&totalPropertiesSet, uint64(queryResult.PropertiesSet()))
-		atomic.AddUint64(&totalRelationshipsCreated, uint64(queryResult.RelationshipsCreated()))
-		atomic.AddUint64(&totalRelationshipsDeleted, uint64(queryResult.RelationshipsDeleted()))
-	}
-	err = latencies.RecordValue(duration.Microseconds())
-	if err != nil {
-		log.Fatalf("Received an error while recording latencies: %v", err)
-	}
-	err = instantLatencies.RecordValue(duration.Microseconds())
-	if err != nil {
-		log.Fatalf("Received an error while recording latencies: %v", err)
-	}
-}
 
 func main() {
 	host := flag.String("h", "127.0.0.1", "Server hostname.")
@@ -106,14 +23,25 @@ func main() {
 	clients := flag.Uint64("c", 50, "number of clients.")
 	numberRequests := flag.Uint64("n", 1000000, "Total number of requests")
 	debug := flag.Int("debug", 0, "Client debug level.")
-	loop := flag.Bool("l", false, "Loop. Run the tests forever.")
+	randomSeed := flag.Int64("random-seed", 12345, "Random seed to use.")
 	graphKey := flag.String("graph-key", "graph", "graph key.")
+	flag.Var(&benchmarkQueries, "query", "Specify a RedisGraph query to send in quotes. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=2")
+	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=10 -query=\"MATCH (n) RETURN n\" -query-ratio=1")
+	jsonOutputFile := flag.String("json-out-file", "benchmark-results.json", "Name of json output file to output benchmark results. If not set, will not print to json.")
+	//loop := flag.Bool("l", false, "Loop. Run the tests forever.")
+	// disabling this for now while we refactor the benchmark client (please use a very large total command number in the meantime )
+	// in the meantime added this two fake vars
+	var loopV = false
+	var loop *bool = &loopV
 	flag.Parse()
-	args := flag.Args()
-	if len(args) < 1 {
-		log.Fatalf("You need to specify a query after the flag command arguments.")
+	if len(benchmarkQueries) < 1 {
+		log.Fatalf("You need to specify at least a query with the -query parameter. For example: -query=\"CREATE (n)\"")
 	}
 	fmt.Printf("Debug level: %d.\n", *debug)
+	fmt.Printf("Using random seed: %d.\n", *randomSeed)
+	rand.Seed(*randomSeed)
+	testResult := NewTestResult("", uint(*clients), *numberRequests, uint64(*rps), "")
+	testResult.SetUsedRandomSeed(*randomSeed)
 
 	var requestRate = Inf
 	var requestBurst = 1
@@ -127,12 +55,8 @@ func main() {
 	var rateLimiter = rate.NewLimiter(requestRate, requestBurst)
 	samplesPerClient := *numberRequests / *clients
 	client_update_tick := 1
-	latencies = hdrhistogram.New(1, 90000000000, 3)
-	instantLatencies = hdrhistogram.New(1, 90000000000, 3)
-	graphRunTimeLatencies = hdrhistogram.New(1, 90000000000, 3)
-	instantGraphRunTimeLatencies = hdrhistogram.New(1, 90000000000, 3)
+
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
-	stopChan := make(chan struct{})
 	// a WaitGroup for the goroutines to tell us they've stopped
 	wg := sync.WaitGroup{}
 	if !*loop {
@@ -140,119 +64,64 @@ func main() {
 	} else {
 		fmt.Printf("Running in loop until you hit Ctrl+C\n")
 	}
-	query := strings.Join(args, " ")
-	rgs := make([]redisgraph.Graph, *clients, *clients)
-	conns := make([]redis.Conn, *clients, *clients)
+	queries := make([]string, len(benchmarkQueries))
+	cmdRates := make([]int, len(benchmarkQueries))
+	totalDifferentCommands, cdf := prepareCommandsDistribution(queries, cmdRates)
 
-	for client_id := 0; uint64(client_id) < *clients; client_id++ {
-		wg.Add(1)
-		cmd := make([]string, len(args))
-		copy(cmd, args)
-		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
-		go ingestionRoutine(&rgs[client_id], true, query, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter)
-	}
+	createRequiredGlobalStructs(totalDifferentCommands)
+
+	rgs := make([]redisgraph.Graph, *clients)
+	conns := make([]redis.Conn, *clients)
+
+	// a WaitGroup for the goroutines to tell us they've stopped
+	dataPointProcessingWg := sync.WaitGroup{}
+	graphDatapointsChann := make(chan GraphQueryDatapoint, *numberRequests)
 
 	// listen for C-c
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
+	c1 := make(chan os.Signal, 1)
+	signal.Notify(c1, os.Interrupt)
+
 	tick := time.NewTicker(time.Duration(client_update_tick) * time.Second)
 
+	dataPointProcessingWg.Add(1)
+	go processGraphDatapointsChannel(graphDatapointsChann, c1, *numberRequests, &dataPointProcessingWg, &instantHistogramsResetMutex)
+
+	startTime := time.Now()
+	for client_id := 0; uint64(client_id) < *clients; client_id++ {
+		wg.Add(1)
+		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
+		go ingestionRoutine(&rgs[client_id], true, queries, cdf, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+	}
+
 	// enter the update loop
-	closed, _, duration, totalMessages, _ := updateCLI(tick, c, *numberRequests, *loop)
+	updateCLI(startTime, tick, c, *numberRequests, *loop)
+
+	endTime := time.Now()
+	duration := time.Since(startTime)
 
 	// benchmarked ended, close the connections
 	for _, standaloneConn := range conns {
 		standaloneConn.Close()
 	}
-	messageRate := float64(totalMessages) / float64(duration.Seconds())
-	p50IngestionMs := float64(latencies.ValueAtQuantile(50.0)) / 1000.0
-	p95IngestionMs := float64(latencies.ValueAtQuantile(95.0)) / 1000.0
-	p99IngestionMs := float64(latencies.ValueAtQuantile(99.0)) / 1000.0
 
-	graph_p50IngestionMs := float64(graphRunTimeLatencies.ValueAtQuantile(50.0)) / 1000.0
-	graph_p95IngestionMs := float64(graphRunTimeLatencies.ValueAtQuantile(95.0)) / 1000.0
-	graph_p99IngestionMs := float64(graphRunTimeLatencies.ValueAtQuantile(99.0)) / 1000.0
+	//wait for all stats to be processed
+	dataPointProcessingWg.Wait()
 
-	fmt.Printf("\n")
-	fmt.Printf("################# RUNTIME STATS #################\n")
-	fmt.Printf("Total Duration %.3f Seconds\n", duration.Seconds())
-	fmt.Printf("Total Commands issued %d\n", totalCommands)
-	fmt.Printf("Total Errors %d ( %3.3f %%)\n", totalErrors, float64(totalErrors/totalCommands*100.0))
-	fmt.Printf("Throughput summary: %.0f requests per second\n", messageRate)
-	fmt.Printf("Overall Client Latency summary (msec):\n")
-	fmt.Printf("    %9s %9s %9s\n", "p50", "p95", "p99")
-	fmt.Printf("    %9.3f %9.3f %9.3f\n", p50IngestionMs, p95IngestionMs, p99IngestionMs)
-	fmt.Printf("################## GRAPH STATS ##################\n")
-	fmt.Printf("Total Empty resultsets %d ( %3.3f %%)\n", totalEmptyResultsets, float64(totalEmptyResultsets/totalCommands*100.0))
-	fmt.Printf("Total Nodes created %d\n", totalNodesCreated)
-	fmt.Printf("Total Nodes deleted %d\n", totalNodesDeleted)
-	fmt.Printf("Total Labels added %d\n", totalLabelsAdded)
-	fmt.Printf("Total Properties set %d\n", totalPropertiesSet)
-	fmt.Printf("Total Relationships created %d\n", totalRelationshipsCreated)
-	fmt.Printf("Total Relationships deleted %d\n", totalRelationshipsDeleted)
-	fmt.Printf("Overall RedisGraph Internal Execution time Latency summary (msec):\n")
-	fmt.Printf("    %9s %9s %9s\n", "p50", "p95", "p99")
-	fmt.Printf("    %9.3f %9.3f %9.3f\n", graph_p50IngestionMs, graph_p95IngestionMs, graph_p99IngestionMs)
+	testResult.FillDurationInfo(startTime, endTime, duration)
+	testResult.BenchmarkFullyRun = totalCommands == *numberRequests
+	testResult.IssuedCommands = totalCommands
+	testResult.OverallGraphInternalQuantiles = GetOverallQuantiles(queries, serverSide_PerQuery_GraphInternalTime_OverallLatencies, serverSide_AllQueries_GraphInternalTime_OverallLatencies)
+	testResult.OverallClientQuantiles = GetOverallQuantiles(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
+	testResult.OverallQueryRates = GetOverallRatesMap(duration, queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
+	testResult.Totals = GetTotalsMap(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies, errorsPerQuery, totalNodesCreatedPerQuery, totalNodesDeletedPerQuery, totalLabelsAddedPerQuery, totalPropertiesSetPerQuery, totalRelationshipsCreatedPerQuery, totalRelationshipsDeletedPerQuery)
 
-	if closed {
-		return
-	}
+	// final merge of pending stats
+	printFinalSummary(queries, cmdRates, totalCommands, duration)
 
-	// tell the goroutine to stop
-	close(stopChan)
-	// and wait for them both to reply back
-	wg.Wait()
-}
-
-func updateCLI(tick *time.Ticker, c chan os.Signal, message_limit uint64, loop bool) (bool, time.Time, time.Duration, uint64, []float64) {
-
-	start := time.Now()
-	prevTime := time.Now()
-	prevMessageCount := uint64(0)
-	messageRateTs := []float64{}
-	fmt.Printf("%26s %7s %25s %25s %7s %25s %25s %26s\n", "Test time", " ", "Total Commands", "Total Errors", "", "Command Rate", "Client p50 with RTT(ms)", "Graph Internal Time p50 (ms)")
-	for {
-		select {
-		case <-tick.C:
-			{
-				now := time.Now()
-				took := now.Sub(prevTime)
-				messageRate := float64(totalCommands-prevMessageCount) / float64(took.Seconds())
-				completionPercentStr := "[----%]"
-				if !loop {
-					completionPercent := float64(totalCommands) / float64(message_limit) * 100.0
-					completionPercentStr = fmt.Sprintf("[%3.1f%%]", completionPercent)
-				}
-				errorPercent := float64(totalErrors) / float64(totalCommands) * 100.0
-
-				p50 := float64(latencies.ValueAtQuantile(50.0)) / 1000.0
-				p50RunTimeGraph := float64(graphRunTimeLatencies.ValueAtQuantile(50.0)) / 1000.0
-				instantP50 := float64(instantLatencies.ValueAtQuantile(50.0)) / 1000.0
-				instantP50RunTimeGraph := float64(instantGraphRunTimeLatencies.ValueAtQuantile(50.0)) / 1000.0
-				instantGraphRunTimeLatencies.Reset()
-				instantLatencies.Reset()
-				if prevMessageCount == 0 && totalCommands != 0 {
-					start = time.Now()
-				}
-				if totalCommands != 0 {
-					messageRateTs = append(messageRateTs, messageRate)
-				}
-				prevMessageCount = totalCommands
-				prevTime = now
-
-				fmt.Printf("%25.0fs %s %25d %25d [%3.1f%%] %25.2f %19.3f (%3.3f) %20.3f (%3.3f)\t", time.Since(start).Seconds(), completionPercentStr, totalCommands, totalErrors, errorPercent, messageRate, instantP50, p50, instantP50RunTimeGraph, p50RunTimeGraph)
-				fmt.Printf("\r")
-				if message_limit > 0 && totalCommands >= uint64(message_limit) && !loop {
-					return true, start, time.Since(start), totalCommands, messageRateTs
-				}
-
-				break
-			}
-
-		case <-c:
-			fmt.Println("\nreceived Ctrl-c - shutting down")
-			return true, start, time.Since(start), totalCommands, messageRateTs
-		}
+	if strings.Compare(*jsonOutputFile, "") != 0 {
+		saveJsonResult(testResult, jsonOutputFile)
 	}
 }
