@@ -80,8 +80,8 @@ func (r *TestResult) SetUsedRandomSeed(seed int64) *TestResult {
 }
 
 func (r *TestResult) FillDurationInfo(startTime time.Time, endTime time.Time, duration time.Duration) {
-	r.StartTime = startTime.Unix()
-	r.EndTime = endTime.Unix()
+	r.StartTime = startTime.UTC().UnixNano() / 1000000
+	r.EndTime = endTime.UTC().UnixNano() / 1000000
 	r.DurationMillis = duration.Milliseconds()
 }
 
