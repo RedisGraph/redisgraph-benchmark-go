@@ -46,7 +46,7 @@ coverage: get test
 	$(GOTEST) -race -coverprofile=coverage.txt -covermode=atomic .
 
 flow-test: build-race
-	./$(BIN_NAME) -n 100000 -query "CREATE(n)" -query-ratio 1 -query "MATCH (n) RETURN n LIMIT 1" -query-ratio 2
+	./$(BIN_NAME) -n 100000 -query "CREATE(n)" -query-ratio 0.33 -query "MATCH (n) RETURN n LIMIT 1" -query-ratio 0.67
 
 release:
 	$(GOGET) github.com/mitchellh/gox

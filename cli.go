@@ -20,7 +20,7 @@ func (i *arrayStringParameters) Set(value string) error {
 	return nil
 }
 
-func printFinalSummary(queries []string, queryRates []int, totalMessages uint64, duration time.Duration) {
+func printFinalSummary(queries []string, queryRates []float64, totalMessages uint64, duration time.Duration) {
 	writer := os.Stdout
 	messageRate := float64(totalMessages) / float64(duration.Seconds())
 

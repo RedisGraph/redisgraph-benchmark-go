@@ -65,7 +65,7 @@ func main() {
 		fmt.Printf("Running in loop until you hit Ctrl+C\n")
 	}
 	queries := make([]string, len(benchmarkQueries))
-	cmdRates := make([]int, len(benchmarkQueries))
+	cmdRates := make([]float64, len(benchmarkQueries))
 	totalDifferentCommands, cdf := prepareCommandsDistribution(queries, cmdRates)
 
 	createRequiredGlobalStructs(totalDifferentCommands)
@@ -113,8 +113,8 @@ func main() {
 	testResult.FillDurationInfo(startTime, endTime, duration)
 	testResult.BenchmarkFullyRun = totalCommands == *numberRequests
 	testResult.IssuedCommands = totalCommands
-	testResult.OverallGraphInternalQuantiles = GetOverallQuantiles(queries, serverSide_PerQuery_GraphInternalTime_OverallLatencies, serverSide_AllQueries_GraphInternalTime_OverallLatencies)
-	testResult.OverallClientQuantiles = GetOverallQuantiles(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
+	testResult.OverallGraphInternalLatencies = GetOverallLatencies(queries, serverSide_PerQuery_GraphInternalTime_OverallLatencies, serverSide_AllQueries_GraphInternalTime_OverallLatencies)
+	testResult.OverallClientLatencies = GetOverallLatencies(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
 	testResult.OverallQueryRates = GetOverallRatesMap(duration, queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
 	testResult.Totals = GetTotalsMap(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies, errorsPerQuery, totalNodesCreatedPerQuery, totalNodesDeletedPerQuery, totalLabelsAddedPerQuery, totalPropertiesSetPerQuery, totalRelationshipsCreatedPerQuery, totalRelationshipsDeletedPerQuery)
 

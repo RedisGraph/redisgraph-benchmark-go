@@ -58,10 +58,10 @@ type TestResult struct {
 	OverallQueryRates map[string]interface{} `json:"OverallQueryRates"`
 
 	// Overall Client Quantiles
-	OverallClientQuantiles map[string]interface{} `json:"OverallClientQuantiles"`
+	OverallClientLatencies map[string]interface{} `json:"OverallClientLatencies"`
 
 	// Overall Graph Internal Quantiles
-	OverallGraphInternalQuantiles map[string]interface{} `json:"OverallGraphInternalQuantiles"`
+	OverallGraphInternalLatencies map[string]interface{} `json:"OverallGraphInternalLatencies"`
 
 	// Per second ( tick ) client stats
 	ClientRunTimeStats map[int64]interface{} `json:"ClientRunTimeStats"`
@@ -165,7 +165,7 @@ func calculateRateMetrics(current, prev int64, took time.Duration) (rate float64
 	return
 }
 
-func generateQuantileMap(hist *hdrhistogram.Histogram) (int64, map[string]float64) {
+func generateLatenciesMap(hist *hdrhistogram.Histogram) (int64, map[string]float64) {
 	ops := hist.TotalCount()
 	q0 := 0.0
 	q50 := 0.0
@@ -173,6 +173,7 @@ func generateQuantileMap(hist *hdrhistogram.Histogram) (int64, map[string]float6
 	q99 := 0.0
 	q999 := 0.0
 	q100 := 0.0
+	average := 0.0
 	if ops > 0 {
 		q0 = float64(hist.ValueAtQuantile(0.0)) / 10e2
 		q50 = float64(hist.ValueAtQuantile(50.0)) / 10e2
@@ -180,19 +181,20 @@ func generateQuantileMap(hist *hdrhistogram.Histogram) (int64, map[string]float6
 		q99 = float64(hist.ValueAtQuantile(99.0)) / 10e2
 		q999 = float64(hist.ValueAtQuantile(99.90)) / 10e2
 		q100 = float64(hist.ValueAtQuantile(100.0)) / 10e2
+		average = (hist.Mean() / float64(1000.0))
 	}
 
-	mp := map[string]float64{"q0": q0, "q50": q50, "q95": q95, "q99": q99, "q999": q999, "q100": q100}
+	mp := map[string]float64{"q0": q0, "q50": q50, "q95": q95, "q99": q99, "q999": q999, "q100": q100, "avg": average}
 	return ops, mp
 }
 
-func GetOverallQuantiles(cmds []string, perQueryHistograms []*hdrhistogram.Histogram, totalsHistogram *hdrhistogram.Histogram) map[string]interface{} {
+func GetOverallLatencies(cmds []string, perQueryHistograms []*hdrhistogram.Histogram, totalsHistogram *hdrhistogram.Histogram) map[string]interface{} {
 	perQueryQuantileMap := map[string]interface{}{}
 	for i, query := range cmds {
-		_, quantileMap := generateQuantileMap(perQueryHistograms[i])
+		_, quantileMap := generateLatenciesMap(perQueryHistograms[i])
 		perQueryQuantileMap[query] = quantileMap
 	}
-	_, totalMap := generateQuantileMap(totalsHistogram)
+	_, totalMap := generateLatenciesMap(totalsHistogram)
 	perQueryQuantileMap["Total"] = totalMap
 	return perQueryQuantileMap
 }
