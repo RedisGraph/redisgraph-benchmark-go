@@ -37,8 +37,8 @@ func main() {
 	if len(benchmarkQueries) < 1 {
 		log.Fatalf("You need to specify at least a query with the -query parameter. For example: -query=\"CREATE (n)\"")
 	}
-	fmt.Printf("Debug level: %d.\n", *debug)
-	fmt.Printf("Using random seed: %d.\n", *randomSeed)
+	log.Printf("Debug level: %d.\n", *debug)
+	log.Printf("Using random seed: %d.\n", *randomSeed)
 	rand.Seed(*randomSeed)
 	testResult := NewTestResult("", uint(*clients), *numberRequests, uint64(*rps), "")
 	testResult.SetUsedRandomSeed(*randomSeed)
@@ -60,9 +60,9 @@ func main() {
 	// a WaitGroup for the goroutines to tell us they've stopped
 	wg := sync.WaitGroup{}
 	if !*loop {
-		fmt.Printf("Total clients: %d. Commands per client: %d Total commands: %d\n", *clients, samplesPerClient, *numberRequests)
+		log.Printf("Total clients: %d. Commands per client: %d Total commands: %d\n", *clients, samplesPerClient, *numberRequests)
 	} else {
-		fmt.Printf("Running in loop until you hit Ctrl+C\n")
+		log.Printf("Running in loop until you hit Ctrl+C\n")
 	}
 	queries := make([]string, len(benchmarkQueries))
 	cmdRates := make([]float64, len(benchmarkQueries))
@@ -83,6 +83,16 @@ func main() {
 
 	c1 := make(chan os.Signal, 1)
 	signal.Notify(c1, os.Interrupt)
+
+	graphC, _ := getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
+	log.Printf("Trying to extract RedisGraph version info\n")
+
+	redisgraphVersion, err := getRedisGraphVersion(graphC)
+	if err != nil {
+		log.Println(fmt.Sprintf("Unable to retrieve RedisGraph version. Continuing anayway. Error: %v\n", err))
+	} else {
+		log.Println(fmt.Sprintf("Detected RedisGraph version %d\n", redisgraphVersion))
+	}
 
 	tick := time.NewTicker(time.Duration(client_update_tick) * time.Second)
 
@@ -116,6 +126,7 @@ func main() {
 	testResult.OverallGraphInternalLatencies = GetOverallLatencies(queries, serverSide_PerQuery_GraphInternalTime_OverallLatencies, serverSide_AllQueries_GraphInternalTime_OverallLatencies)
 	testResult.OverallClientLatencies = GetOverallLatencies(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
 	testResult.OverallQueryRates = GetOverallRatesMap(duration, queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
+	testResult.DBSpecificConfigs = GetDBConfigsMap(redisgraphVersion)
 	testResult.Totals = GetTotalsMap(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies, errorsPerQuery, totalNodesCreatedPerQuery, totalNodesDeletedPerQuery, totalLabelsAddedPerQuery, totalPropertiesSetPerQuery, totalRelationshipsCreatedPerQuery, totalRelationshipsDeletedPerQuery)
 
 	// final merge of pending stats
@@ -124,4 +135,36 @@ func main() {
 	if strings.Compare(*jsonOutputFile, "") != 0 {
 		saveJsonResult(testResult, jsonOutputFile)
 	}
+}
+
+func GetDBConfigsMap(version int64) map[string]interface{} {
+	dbConfigsMap := map[string]interface{}{}
+	dbConfigsMap["RedisGraphVersion"] = version
+	return dbConfigsMap
+}
+
+// getRedisGraphVersion returns RedisGraph version by issuing "MODULE LIST" command
+// and iterating through the availabe modules up until "graph" is found as the name property
+func getRedisGraphVersion(graphClient redisgraph.Graph) (version int64, err error) {
+	var values []interface{}
+	var moduleInfo []interface{}
+	var moduleName string
+	values, err = redis.Values(graphClient.Conn.Do("MODULE", "LIST"))
+	if err != nil {
+		return
+	}
+	for _, rawModule := range values {
+		moduleInfo, err = redis.Values(rawModule, err)
+		if err != nil {
+			return
+		}
+		moduleName, err = redis.String(moduleInfo[1], err)
+		if err != nil {
+			return
+		}
+		if moduleName == "graph" {
+			version, err = redis.Int64(moduleInfo[3], err)
+		}
+	}
+	return
 }
