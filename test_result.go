@@ -153,7 +153,7 @@ func saveJsonResult(testResult *TestResult, jsonOutputFile *string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Saving JSON results file to %s\n", *jsonOutputFile)
+	log.Printf("Saving JSON results file to %s\n", *jsonOutputFile)
 	err = ioutil.WriteFile(*jsonOutputFile, file, 0644)
 	if err != nil {
 		log.Fatal(err)
