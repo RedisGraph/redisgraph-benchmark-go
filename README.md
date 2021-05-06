@@ -6,6 +6,36 @@ This repo contains code to quick benchmark RedisGraph, using the official [redis
 
 ## Installation
 
+
+### Standalone binaries ( no Golang needed )
+
+If you don't have go on your machine and just want to use the produced binaries you can download the following prebuilt bins:
+
+| OS | Arch | Link |
+| :---         |     :---:      |          ---: |
+| Windows   | amd64     | [redisgraph-benchmark-go_windows_amd64.exe](https://s3.amazonaws.com/benchmarks.redislabs/tools/redisgraph-benchmark-go/unstable/redisgraph-benchmark-go_windows_amd64.exe)    |
+| Linux   | amd64     | [redisgraph-benchmark-go_linux_amd64](https://s3.amazonaws.com/benchmarks.redislabs/tools/redisgraph-benchmark-go/unstable/redisgraph-benchmark-go_linux_amd64)    |
+| Linux   | arm64     | [redisgraph-benchmark-go_linux_arm64](https://s3.amazonaws.com/benchmarks.redislabs/tools/redisgraph-benchmark-go/unstable/redisgraph-benchmark-go_linux_arm64)    |
+| Darwin   | amd64     | [redisgraph-benchmark-go_darwin_amd64](https://s3.amazonaws.com/benchmarks.redislabs/tools/redisgraph-benchmark-go/unstable/redisgraph-benchmark-go_darwin_amd64)    |
+| Darwin   | arm64     | [redisgraph-benchmark-go_darwin_arm64](https://s3.amazonaws.com/benchmarks.redislabs/tools/redisgraph-benchmark-go/unstable/redisgraph-benchmark-go_darwin_arm64)    |
+
+
+
+Here's an example on how to use the above links:
+```bash
+# Fetch this repo
+wget https://s3.amazonaws.com/benchmarks.redislabs/tools/redisgraph-benchmark-go/unstable/redisgraph-benchmark-go_linux_amd64
+
+# change permissions
+chmod 755 redisgraph-benchmark-go_linux_amd64
+
+# give it a try 
+./redisgraph-benchmark-go_linux_amd64 --help
+```
+
+
+## Installation in a Golang env
+
 The easiest way to get and install the redisgraph-benchmark-go Go program is to use
 `go get` and then `go install`:
 ```bash
