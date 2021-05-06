@@ -54,6 +54,7 @@ func main() {
 
 	var rateLimiter = rate.NewLimiter(requestRate, requestBurst)
 	samplesPerClient := *numberRequests / *clients
+	samplesPerClientRemainder := *numberRequests % *clients
 	client_update_tick := 1
 
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
@@ -61,6 +62,9 @@ func main() {
 	wg := sync.WaitGroup{}
 	if !*loop {
 		log.Printf("Total clients: %d. Commands per client: %d Total commands: %d\n", *clients, samplesPerClient, *numberRequests)
+		if samplesPerClientRemainder != 0 {
+			log.Printf("Last client will issue: %d commands.\n", samplesPerClientRemainder+samplesPerClient)
+		}
 	} else {
 		log.Printf("Running in loop until you hit Ctrl+C\n")
 	}
@@ -98,12 +102,15 @@ func main() {
 
 	dataPointProcessingWg.Add(1)
 	go processGraphDatapointsChannel(graphDatapointsChann, c1, *numberRequests, &dataPointProcessingWg, &instantHistogramsResetMutex)
-
+	clientTotalCmds := samplesPerClient
 	startTime := time.Now()
 	for client_id := 0; uint64(client_id) < *clients; client_id++ {
 		wg.Add(1)
 		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
-		go ingestionRoutine(&rgs[client_id], true, queries, cdf, samplesPerClient, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+		if uint64(client_id) == (*clients - uint64(1)) {
+			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
+		}
+		go ingestionRoutine(&rgs[client_id], true, queries, cdf, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
 	}
 
 	// enter the update loop
