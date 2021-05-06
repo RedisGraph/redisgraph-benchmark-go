@@ -102,11 +102,15 @@ func main() {
 
 	dataPointProcessingWg.Add(1)
 	go processGraphDatapointsChannel(graphDatapointsChann, c1, *numberRequests, &dataPointProcessingWg, &instantHistogramsResetMutex)
+	// Total commands to be issue per client. Equal for all clients with exception of the last one ( see comment bellow )
 	clientTotalCmds := samplesPerClient
 	startTime := time.Now()
 	for client_id := 0; uint64(client_id) < *clients; client_id++ {
 		wg.Add(1)
 		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
+		// Given the total commands might not be divisible by the #clients
+		// the last client will send the remainder commands to match the desired request count.
+		// It's OK to alter clientTotalCmds given this is the last time we use it's value
 		if uint64(client_id) == (*clients - uint64(1)) {
 			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
 		}
