@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/RedisGraph/redisgraph-go"
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/gomodule/redigo/redis"
 	"golang.org/x/time/rate"
 	"log"
@@ -31,9 +32,26 @@ func main() {
 	//loop := flag.Bool("l", false, "Loop. Run the tests forever.")
 	// disabling this for now while we refactor the benchmark client (please use a very large total command number in the meantime )
 	// in the meantime added this two fake vars
+	// data sink
+	runName := flag.String("rts-run", "perf-run", "Run name.")
+	rtsHost := flag.String("rts-h", "127.0.0.1", "RedisTimeSeries hostname.")
+	rtsPort := flag.Int("rts-p", 6379, "RedisTimeSeries port.")
+	rtsPassword := flag.String("rts-a", "", "RedisTimeSeries Password for Redis Auth.")
+	var rtsAuth *string = nil
+	rtsEnabled := flag.Bool("push-results", false, "Push results to redistimeseries in real-time.")
 	var loopV = false
 	var loop *bool = &loopV
 	flag.Parse()
+	if *rtsPassword != "" {
+		rtsAuth = rtsPassword
+	}
+	var rtsClient *redistimeseries.Client = nil
+	if *rtsEnabled == true {
+		log.Printf("Creating RTS client.\n")
+		rtsClient = redistimeseries.NewClient(fmt.Sprintf("%s:%d", *rtsHost, *rtsPort), "redisgraph-rts-client", rtsAuth)
+	} else {
+		log.Printf("RTS export disabled.\n")
+	}
 	if len(benchmarkQueries) < 1 {
 		log.Fatalf("You need to specify at least a query with the -query parameter. For example: -query=\"CREATE (n)\"")
 	}
@@ -117,8 +135,8 @@ func main() {
 		go ingestionRoutine(&rgs[client_id], true, queries, cdf, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
 	}
 
-	// enter the update loop
-	updateCLI(startTime, tick, c, *numberRequests, *loop)
+	// enter the update loopupdateCLIupdateCLI
+	updateCLI(startTime, tick, c, *numberRequests, *loop, rtsClient, *runName)
 
 	endTime := time.Now()
 	duration := time.Since(startTime)

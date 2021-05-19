@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/HdrHistogram/hdrhistogram-go"
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/olekukonko/tablewriter"
 	"os"
 	"sync/atomic"
@@ -147,7 +148,7 @@ func renderGraphResultSetTable(queries []string, writer *os.File, tableTitle str
 	table.Render()
 }
 
-func updateCLI(startTime time.Time, tick *time.Ticker, c chan os.Signal, message_limit uint64, loop bool) bool {
+func updateCLI(startTime time.Time, tick *time.Ticker, c chan os.Signal, message_limit uint64, loop bool, client *redistimeseries.Client, suffix string) bool {
 
 	start := startTime
 	prevTime := startTime
@@ -183,6 +184,25 @@ func updateCLI(startTime time.Time, tick *time.Ticker, c chan os.Signal, message
 				}
 				prevMessageCount = currentCmds
 				prevTime = now
+				if client != nil {
+					opts := redistimeseries.DefaultCreateOptions
+					for _, percentile := range []float64{0, 50.0, 95, 99, 99.9, 100.0} {
+						overallIncludingRTT := float64(clientSide_AllQueries_OverallLatencies.ValueAtQuantile(percentile)) / 1000.0
+						overallRunTimeGraph := float64(serverSide_AllQueries_GraphInternalTime_OverallLatencies.ValueAtQuantile(percentile)) / 1000.0
+						instantIncludingRTT := float64(clientSide_AllQueries_InstantLatencies.ValueAtQuantile(percentile)) / 1000.0
+						instantRunTimeGraph := float64(serverSide_AllQueries_GraphInternalTime_InstantLatencies.ValueAtQuantile(percentile)) / 1000.0
+						opts.Labels = map[string]string{"metric": "overallIncludingRTT"}
+						client.AddWithOptions(fmt.Sprintf("%s:overallIncludingRTT:p%.3f", suffix, percentile), now.UTC().Unix()*1000, overallIncludingRTT, opts)
+						opts.Labels = map[string]string{"metric": "overallRunTimeGraph"}
+						client.AddWithOptions(fmt.Sprintf("%s:overallRunTimeGraph:p%.3f", suffix, percentile), now.UTC().Unix()*1000, overallRunTimeGraph, opts)
+						opts.Labels = map[string]string{"metric": "instantIncludingRTT"}
+						client.AddWithOptions(fmt.Sprintf("%s:instantIncludingRTT:p%.3f", suffix, percentile), now.UTC().Unix()*1000, instantIncludingRTT, opts)
+						opts.Labels = map[string]string{"metric": "instantRunTimeGraph"}
+						client.AddWithOptions(fmt.Sprintf("%s:instantRunTimeGraph:p%.3f", suffix, percentile), now.UTC().Unix()*1000, instantRunTimeGraph, opts)
+					}
+					opts.Labels = map[string]string{"metric": "messageRate"}
+					client.AddWithOptions(fmt.Sprintf("%s:messageRate", suffix), now.UTC().Unix()*1000, messageRate, opts)
+				}
 
 				fmt.Printf("%25.0fs %s %25d %25d [%3.1f%%] %25.2f %19.3f (%3.3f) %20.3f (%3.3f)\t", time.Since(start).Seconds(), completionPercentStr, currentCmds, currentErrs, errorPercent, messageRate, instantP50, p50, instantP50RunTimeGraph, p50RunTimeGraph)
 				fmt.Printf("\r")
