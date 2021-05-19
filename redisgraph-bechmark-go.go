@@ -33,7 +33,17 @@ func main() {
 	// in the meantime added this two fake vars
 	var loopV = false
 	var loop *bool = &loopV
+	version := flag.Bool("v", false, "Output version and exit")
 	flag.Parse()
+	git_sha := toolGitSHA1()
+	git_dirty_str := ""
+	if toolGitDirty() {
+		git_dirty_str = "-dirty"
+	}
+	log.Printf("redisgraph-benchmark-go (git_sha1:%s%s)\n", git_sha, git_dirty_str)
+	if *version {
+		os.Exit(0)
+	}
 	if len(benchmarkQueries) < 1 {
 		log.Fatalf("You need to specify at least a query with the -query parameter. For example: -query=\"CREATE (n)\"")
 	}
