@@ -9,15 +9,29 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 BIN_NAME=redisgraph-benchmark-go
+DISTDIR = ./dist
+DIST_OS_ARCHS = "linux/amd64 linux/arm64 linux/arm windows/amd64 darwin/amd64 darwin/arm64"
+LDFLAGS = "-X 'main.GitSHA1=$(GIT_SHA)' -X 'main.GitDirty=$(GIT_DIRTY)'"
+
+# Build-time GIT variables
+ifeq ($(GIT_SHA),)
+GIT_SHA:=$(shell git rev-parse HEAD)
+endif
+
+ifeq ($(GIT_DIRTY),)
+GIT_DIRTY:=$(shell git diff --no-ext-diff 2> /dev/null | wc -l)
+endif
 
 .PHONY: all test coverage build checkfmt fmt
 all: test coverage build checkfmt fmt
 
 build:
-	$(GOBUILD) .
+	$(GOBUILD) \
+        -ldflags=$(LDFLAGS) .
 
 build-race:
-	$(GOBUILDRACE) .
+	$(GOBUILDRACE) \
+        -ldflags=$(LDFLAGS) .
 
 checkfmt:
 	@echo 'Checking gofmt';\
@@ -51,4 +65,12 @@ flow-test: build-race
 release:
 	$(GOGET) github.com/mitchellh/gox
 	$(GOGET) github.com/tcnksm/ghr
-	GO111MODULE=on gox  -osarch "linux/amd64 darwin/amd64" -output "dist/redisgraph-benchmark-go_{{.OS}}_{{.Arch}}" .
+	GO111MODULE=on gox  -osarch ${DIST_OS_ARCHS} -output "${DISTDIR}/${BIN_NAME}_{{.OS}}_{{.Arch}}" \
+	    -ldflags=$(LDFLAGS) .
+
+publish: release
+	@for f in $(shell ls ${DISTDIR}); \
+	do \
+	echo "copying ${DISTDIR}/$${f}"; \
+	aws s3 cp ${DISTDIR}/$${f} s3://benchmarks.redislabs/tools/${BIN_NAME}/unstable/$${f} --acl public-read; \
+	done

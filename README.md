@@ -1,10 +1,36 @@
 # redisgraph-benchmark-go
 
+[![license](https://img.shields.io/github/license/RedisGraph/redisgraph-benchmark-go.svg)](https://github.com/RedisGraph/redisgraph-benchmark-go)
+[![GitHub issues](https://img.shields.io/github/release/RedisGraph/redisgraph-benchmark-go.svg)](https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest)
+[![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/gWBRT6P)
+
 ## Overview
 
 This repo contains code to quick benchmark RedisGraph, using the official [redisgraph-go](https://github.com/RedisGraph/redisgraph-go) client.  
+The tool is written in Go and is cross-compiled for Linux, Windows, MacOS and even on Raspberry Pi.
 
 ## Installation
+
+
+### Standalone binaries ( no Golang needed )
+
+If you don't have Go on your machine and just want to use the produced binaries you can download 
+the prebuilt bins for Windows, Linux, and Darwin from the [Releases page](https://github.com/RedisGraph/redisgraph-benchmark-go/releases).
+
+Here's an example on how to use the above links:
+```bash
+# Fetch this repo
+wget https://github.com/RedisGraph/redisgraph-benchmark-go/releases/download/v0.0.1/redisgraph-benchmark-go_linux_amd64
+
+# change permissions
+chmod 755 redisgraph-benchmark-go_linux_amd64
+
+# give it a try 
+./redisgraph-benchmark-go_linux_amd64 --help
+```
+
+
+## Installation in a Golang env
 
 The easiest way to get and install the redisgraph-benchmark-go Go program is to use
 `go get` and then `go install`:
