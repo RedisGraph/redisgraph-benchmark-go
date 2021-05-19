@@ -29,16 +29,15 @@ func main() {
 	flag.Var(&benchmarkQueries, "query", "Specify a RedisGraph query to send in quotes. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=2")
 	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=10 -query=\"MATCH (n) RETURN n\" -query-ratio=1")
 	jsonOutputFile := flag.String("json-out-file", "benchmark-results.json", "Name of json output file to output benchmark results. If not set, will not print to json.")
-	//loop := flag.Bool("l", false, "Loop. Run the tests forever.")
-	// disabling this for now while we refactor the benchmark client (please use a very large total command number in the meantime )
-	// in the meantime added this two fake vars
+	cliUpdateTick := flag.Duration("reporting-period", time.Second*10, "Period to report stats.")
+
 	// data sink
-	runName := flag.String("rts-run", "perf-run", "Run name.")
-	rtsHost := flag.String("rts-h", "127.0.0.1", "RedisTimeSeries hostname.")
-	rtsPort := flag.Int("rts-p", 6379, "RedisTimeSeries port.")
-	rtsPassword := flag.String("rts-a", "", "RedisTimeSeries Password for Redis Auth.")
+	runName := flag.String("exporter-run-name", "perf-run", "Run name.")
+	rtsHost := flag.String("exporter-rts-host", "127.0.0.1", "RedisTimeSeries hostname.")
+	rtsPort := flag.Int("exporter-rts-port", 6379, "RedisTimeSeries port.")
+	rtsPassword := flag.String("exporter-rts-auth", "", "RedisTimeSeries Password for Redis Auth.")
 	var rtsAuth *string = nil
-	rtsEnabled := flag.Bool("push-results", false, "Push results to redistimeseries in real-time.")
+	rtsEnabled := flag.Bool("push-results", false, "Push results to redistimeseries exporter in real-time. Time granularity is set via the -tick parameter.")
 	var loopV = false
 	var loop *bool = &loopV
 	flag.Parse()
@@ -73,7 +72,6 @@ func main() {
 	var rateLimiter = rate.NewLimiter(requestRate, requestBurst)
 	samplesPerClient := *numberRequests / *clients
 	samplesPerClientRemainder := *numberRequests % *clients
-	client_update_tick := 1
 
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
 	// a WaitGroup for the goroutines to tell us they've stopped
@@ -116,7 +114,7 @@ func main() {
 		log.Println(fmt.Sprintf("Detected RedisGraph version %d\n", redisgraphVersion))
 	}
 
-	tick := time.NewTicker(time.Duration(client_update_tick) * time.Second)
+	tick := time.NewTicker(*cliUpdateTick)
 
 	dataPointProcessingWg.Add(1)
 	go processGraphDatapointsChannel(graphDatapointsChann, c1, *numberRequests, &dataPointProcessingWg, &instantHistogramsResetMutex)
