@@ -37,10 +37,20 @@ func main() {
 	rtsPort := flag.Int("exporter-rts-port", 6379, "RedisTimeSeries port.")
 	rtsPassword := flag.String("exporter-rts-auth", "", "RedisTimeSeries Password for Redis Auth.")
 	var rtsAuth *string = nil
-	rtsEnabled := flag.Bool("push-results", false, "Push results to redistimeseries exporter in real-time. Time granularity is set via the -tick parameter.")
+	rtsEnabled := flag.Bool("enable-exporter-rps", false, "Push results to redistimeseries exporter in real-time. Time granularity is set via the -reporting-period parameter.")
 	var loopV = false
 	var loop *bool = &loopV
+	version := flag.Bool("v", false, "Output version and exit")
 	flag.Parse()
+	git_sha := toolGitSHA1()
+	git_dirty_str := ""
+	if toolGitDirty() {
+		git_dirty_str = "-dirty"
+	}
+	log.Printf("redisgraph-benchmark-go (git_sha1:%s%s)\n", git_sha, git_dirty_str)
+	if *version {
+		os.Exit(0)
+	}
 	if *rtsPassword != "" {
 		rtsAuth = rtsPassword
 	}
