@@ -9,19 +9,29 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 BIN_NAME=redisgraph-benchmark-go
+# Build-time GIT variables
+ifeq ($(GIT_SHA),)
+GIT_SHA:=$(shell git rev-parse HEAD)
+endif
+
+ifeq ($(GIT_DIRTY),)
+GIT_DIRTY:=$(shell git diff --no-ext-diff 2> /dev/null | wc -l)
+endif
 
 .PHONY: all test coverage build checkfmt fmt
 all: test coverage build checkfmt fmt
 
 build:
-	$(GOBUILD) .
+	$(GOBUILD) \
+        -ldflags=$(LDFLAGS) .
 
 build-race:
-	$(GOBUILDRACE) .
+	$(GOBUILDRACE) \
+        -ldflags=$(LDFLAGS) .
 
 checkfmt:
 	@echo 'Checking gofmt';\
- 	bash -c "diff -u <(echo -n) <(gofmt -d .)";\
+ 	bash -c "diff -u <(echo -n) <(go fmt .)";\
 	EXIT_CODE=$$?;\
 	if [ "$$EXIT_CODE"  -ne 0 ]; then \
 		echo '$@: Go files must be formatted with gofmt'; \
@@ -33,7 +43,7 @@ lint:
 	golangci-lint run
 
 fmt:
-	$(GOFMT) ./...
+	$(GOFMT) .
 
 get:
 	$(GOGET) -t -v ./...

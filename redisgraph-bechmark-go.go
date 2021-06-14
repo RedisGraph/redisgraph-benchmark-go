@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/RedisGraph/redisgraph-go"
+	redistimeseries "github.com/RedisTimeSeries/redistimeseries-go"
 	"github.com/gomodule/redigo/redis"
 	"golang.org/x/time/rate"
 	"log"
@@ -24,22 +25,52 @@ func main() {
 	numberRequests := flag.Uint64("n", 1000000, "Total number of requests")
 	debug := flag.Int("debug", 0, "Client debug level.")
 	randomSeed := flag.Int64("random-seed", 12345, "Random seed to use.")
+	randomIntMin := flag.Int64("random-int-min", 1, "__rand_int__ lower value limit. __rand_int__ distribution is uniform Random")
+	randomIntMax := flag.Int64("random-int-max", 1000000, "__rand_int__ upper value limit. __rand_int__ distribution is uniform Random")
 	graphKey := flag.String("graph-key", "graph", "graph key.")
 	flag.Var(&benchmarkQueries, "query", "Specify a RedisGraph query to send in quotes. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=2")
 	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=10 -query=\"MATCH (n) RETURN n\" -query-ratio=1")
 	jsonOutputFile := flag.String("json-out-file", "benchmark-results.json", "Name of json output file to output benchmark results. If not set, will not print to json.")
-	//loop := flag.Bool("l", false, "Loop. Run the tests forever.")
-	// disabling this for now while we refactor the benchmark client (please use a very large total command number in the meantime )
-	// in the meantime added this two fake vars
+	cliUpdateTick := flag.Duration("reporting-period", time.Second*10, "Period to report stats.")
+	// data sink
+	runName := flag.String("exporter-run-name", "perf-run", "Run name.")
+	rtsHost := flag.String("exporter-rts-host", "127.0.0.1", "RedisTimeSeries hostname.")
+	rtsPort := flag.Int("exporter-rts-port", 6379, "RedisTimeSeries port.")
+	rtsPassword := flag.String("exporter-rts-auth", "", "RedisTimeSeries Password for Redis Auth.")
+	var rtsAuth *string = nil
+	rtsEnabled := flag.Bool("enable-exporter-rps", false, "Push results to redistimeseries exporter in real-time. Time granularity is set via the -reporting-period parameter.")
+	continueOnError := flag.Bool("continue-on-error", false, "Continue benchmark in case of error replies.")
+
 	var loopV = false
 	var loop *bool = &loopV
+	version := flag.Bool("v", false, "Output version and exit")
 	flag.Parse()
+	git_sha := toolGitSHA1()
+	git_dirty_str := ""
+	if toolGitDirty() {
+		git_dirty_str = "-dirty"
+	}
+	log.Printf("redisgraph-benchmark-go (git_sha1:%s%s)\n", git_sha, git_dirty_str)
+	if *version {
+		os.Exit(0)
+	}
+	if *rtsPassword != "" {
+		rtsAuth = rtsPassword
+	}
+	var rtsClient *redistimeseries.Client = nil
+	if *rtsEnabled == true {
+		log.Printf("Creating RTS client.\n")
+		rtsClient = redistimeseries.NewClient(fmt.Sprintf("%s:%d", *rtsHost, *rtsPort), "redisgraph-rts-client", rtsAuth)
+	} else {
+		log.Printf("RTS export disabled.\n")
+	}
 	if len(benchmarkQueries) < 1 {
 		log.Fatalf("You need to specify at least a query with the -query parameter. For example: -query=\"CREATE (n)\"")
 	}
 	log.Printf("Debug level: %d.\n", *debug)
 	log.Printf("Using random seed: %d.\n", *randomSeed)
 	rand.Seed(*randomSeed)
+	randLimit := *randomIntMax - *randomIntMin
 	testResult := NewTestResult("", uint(*clients), *numberRequests, uint64(*rps), "")
 	testResult.SetUsedRandomSeed(*randomSeed)
 
@@ -55,7 +86,6 @@ func main() {
 	var rateLimiter = rate.NewLimiter(requestRate, requestBurst)
 	samplesPerClient := *numberRequests / *clients
 	samplesPerClientRemainder := *numberRequests % *clients
-	client_update_tick := 1
 
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
 	// a WaitGroup for the goroutines to tell us they've stopped
@@ -98,7 +128,7 @@ func main() {
 		log.Println(fmt.Sprintf("Detected RedisGraph version %d\n", redisgraphVersion))
 	}
 
-	tick := time.NewTicker(time.Duration(client_update_tick) * time.Second)
+	tick := time.NewTicker(*cliUpdateTick)
 
 	dataPointProcessingWg.Add(1)
 	go processGraphDatapointsChannel(graphDatapointsChann, c1, *numberRequests, &dataPointProcessingWg, &instantHistogramsResetMutex)
@@ -114,11 +144,11 @@ func main() {
 		if uint64(client_id) == (*clients - uint64(1)) {
 			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
 		}
-		go ingestionRoutine(&rgs[client_id], true, queries, cdf, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
 	}
 
-	// enter the update loop
-	updateCLI(startTime, tick, c, *numberRequests, *loop)
+	// enter the update loopupdateCLIupdateCLI
+	updateCLI(startTime, tick, c, *numberRequests, *loop, rtsClient, *runName)
 
 	endTime := time.Now()
 	duration := time.Since(startTime)

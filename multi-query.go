@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math"
 	"math/rand"
 	"strconv"
 )
@@ -33,7 +34,7 @@ func prepareCommandsDistribution(cmds []string, cmdRates []float64) (int, []floa
 		totalRateSum += cmdRates[i]
 	}
 	// probability density function
-	if totalRateSum != 1.0 {
+	if math.Abs(1.0-totalRateSum) > 0.01 {
 		log.Fatalf("Total ratio should be 1.0 ( currently is %f )", totalRateSum)
 	}
 	// probability density function

@@ -5,27 +5,30 @@ import (
 	"github.com/RedisGraph/redisgraph-go"
 	"golang.org/x/time/rate"
 	"log"
+	"math/rand"
+	"strings"
 	"sync"
 	"time"
 )
 
-func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, commandsCDF []float32, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
 	defer wg.Done()
 	for i := 0; uint64(i) < number_samples || loop; i++ {
 		cmdPos := sample(commandsCDF)
-		sendCmdLogic(rg, cmdS[cmdPos], cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
+		sendCmdLogic(rg, cmdS[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
 	}
 }
 
-func sendCmdLogic(rg *redisgraph.Graph, query string, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func sendCmdLogic(rg *redisgraph.Graph, query string, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
 	if useRateLimiter {
 		r := rateLimiter.ReserveN(time.Now(), int(1))
 		time.Sleep(r.Delay())
 	}
 	var err error
 	var queryResult *redisgraph.QueryResult
+	processedQuery := processQuery(query, randomIntPadding, randomIntMax)
 	startT := time.Now()
-	queryResult, err = rg.Query(query)
+	queryResult, err = rg.Query(processedQuery)
 	endT := time.Now()
 
 	duration := endT.Sub(startT)
@@ -68,4 +71,12 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, cmdPos int, continueOnErro
 		datapoint.RelationshipsDeleted = uint64(queryResult.RelationshipsDeleted())
 	}
 	statsChannel <- datapoint
+}
+
+func processQuery(query string, randomIntPadding int64, randomIntMax int64) string {
+	for strings.Index(query, randIntPlaceholder) != -1 {
+		randIntString := fmt.Sprintf("%d", rand.Int63n(randomIntMax)+randomIntPadding)
+		query = strings.Replace(query, randIntPlaceholder, randIntString, 1)
+	}
+	return query
 }
