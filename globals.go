@@ -26,6 +26,8 @@ var totalPropertiesSetPerQuery []uint64
 var totalRelationshipsCreatedPerQuery []uint64
 var totalRelationshipsDeletedPerQuery []uint64
 
+var randIntPlaceholder string = "__rand_int__"
+
 // no locking is required when using the histograms. data is duplicated on the instant and overall histograms
 var clientSide_AllQueries_OverallLatencies *hdrhistogram.Histogram
 var serverSide_AllQueries_GraphInternalTime_OverallLatencies *hdrhistogram.Histogram
