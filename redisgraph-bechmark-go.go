@@ -109,7 +109,7 @@ func main() {
 
 	// a WaitGroup for the goroutines to tell us they've stopped
 	dataPointProcessingWg := sync.WaitGroup{}
-	graphDatapointsChann := make(chan GraphQueryDatapoint, *numberRequests)
+	graphDatapointsChann := make(chan GraphQueryDatapoint, *clients)
 
 	// listen for C-c
 	c := make(chan os.Signal, 1)

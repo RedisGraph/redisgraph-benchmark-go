@@ -9,6 +9,8 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 BIN_NAME=redisgraph-benchmark-go
+DISTDIR = ./dist
+
 # Build-time GIT variables
 ifeq ($(GIT_SHA),)
 GIT_SHA:=$(shell git rev-parse HEAD)
@@ -17,6 +19,8 @@ endif
 ifeq ($(GIT_DIRTY),)
 GIT_DIRTY:=$(shell git diff --no-ext-diff 2> /dev/null | wc -l)
 endif
+
+LDFLAGS = "-X 'main.GitSHA1=$(GIT_SHA)' -X 'main.GitDirty=$(GIT_DIRTY)'"
 
 .PHONY: all test coverage build checkfmt fmt
 all: test coverage build checkfmt fmt
