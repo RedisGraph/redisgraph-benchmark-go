@@ -11,15 +11,15 @@ import (
 	"time"
 )
 
-func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, commandIsRO []bool, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, useWait bool, commandIsRO []bool, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
 	defer wg.Done()
 	for i := 0; uint64(i) < number_samples || loop; i++ {
 		cmdPos := sample(commandsCDF)
-		sendCmdLogic(rg, cmdS[cmdPos], commandIsRO[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
+		sendCmdLogic(rg, cmdS[cmdPos], useWait, commandIsRO[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
 	}
 }
 
-func sendCmdLogic(rg *redisgraph.Graph, query string, readOnly bool, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
 	if useRateLimiter {
 		r := rateLimiter.ReserveN(time.Now(), int(1))
 		time.Sleep(r.Delay())
@@ -31,7 +31,11 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, readOnly bool, randomIntPa
 	if readOnly {
 		queryResult, err = rg.ROQuery(processedQuery)
 	} else {
-		queryResult, err = rg.Query(processedQuery)
+		if useWait {
+			queryResult, err = rg.WriteWait(processedQuery)
+		} else {
+			queryResult, err = rg.Query(processedQuery)
+		}
 	}
 	endT := time.Now()
 

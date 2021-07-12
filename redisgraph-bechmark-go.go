@@ -41,6 +41,7 @@ func main() {
 	var rtsAuth *string = nil
 	rtsEnabled := flag.Bool("enable-exporter-rps", false, "Push results to redistimeseries exporter in real-time. Time granularity is set via the -reporting-period parameter.")
 	continueOnError := flag.Bool("continue-on-error", false, "Continue benchmark in case of error replies.")
+	useWaitOnWrites := flag.Bool("use-wait", false, "After each write query use WAIT.")
 
 	var loopV = false
 	var loop *bool = &loopV
@@ -156,7 +157,7 @@ func main() {
 		if uint64(client_id) == (*clients - uint64(1)) {
 			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
 		}
-		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, *useWaitOnWrites, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
 	}
 
 	// enter the update loopupdateCLIupdateCLI
