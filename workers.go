@@ -11,15 +11,15 @@ import (
 	"time"
 )
 
-func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, commandIsRO []bool, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
 	defer wg.Done()
 	for i := 0; uint64(i) < number_samples || loop; i++ {
 		cmdPos := sample(commandsCDF)
-		sendCmdLogic(rg, cmdS[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
+		sendCmdLogic(rg, cmdS[cmdPos], commandIsRO[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
 	}
 }
 
-func sendCmdLogic(rg *redisgraph.Graph, query string, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func sendCmdLogic(rg *redisgraph.Graph, query string, readOnly bool, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
 	if useRateLimiter {
 		r := rateLimiter.ReserveN(time.Now(), int(1))
 		time.Sleep(r.Delay())
@@ -28,7 +28,11 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, randomIntPadding, randomIn
 	var queryResult *redisgraph.QueryResult
 	processedQuery := processQuery(query, randomIntPadding, randomIntMax)
 	startT := time.Now()
-	queryResult, err = rg.Query(processedQuery)
+	if readOnly {
+		queryResult, err = rg.ROQuery(processedQuery)
+	} else {
+		queryResult, err = rg.Query(processedQuery)
+	}
 	endT := time.Now()
 
 	duration := endT.Sub(startT)
