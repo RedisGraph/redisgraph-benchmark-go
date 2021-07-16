@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.0.1
-	github.com/RedisGraph/redisgraph-go v1.0.1-0.20210712111801-f2690ec0a32a
+	github.com/RedisGraph/redisgraph-go v1.0.1-0.20210716134844-415a922a3642
 	github.com/RedisTimeSeries/redistimeseries-go v1.4.4
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/mitchellh/gox v1.0.1 // indirect
