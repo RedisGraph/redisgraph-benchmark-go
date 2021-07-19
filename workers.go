@@ -32,7 +32,7 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, ra
 		queryResult, err = rg.ROQuery(processedQuery)
 	} else {
 		if useWait {
-			queryResult, err = rg.WriteWait(processedQuery, 5)
+			queryResult, err = rg.WriteWait(processedQuery, 5000)
 		} else {
 			queryResult, err = rg.Query(processedQuery)
 		}
