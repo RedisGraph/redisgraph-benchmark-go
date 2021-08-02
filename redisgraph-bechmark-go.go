@@ -90,6 +90,7 @@ func main() {
 	samplesPerClientRemainder := *numberRequests % *clients
 
 	connectionStr := fmt.Sprintf("%s:%d", *host, *port)
+
 	// a WaitGroup for the goroutines to tell us they've stopped
 	wg := sync.WaitGroup{}
 	if !*loop {
@@ -119,6 +120,8 @@ func main() {
 
 	rgs := make([]redisgraph.Graph, *clients)
 	conns := make([]redis.Conn, *clients)
+	// a WaitGroup for the goroutines to tell us they have in flight requests
+	wgInFlight := make([]sync.WaitGroup, *clients)
 
 	// a WaitGroup for the goroutines to tell us they've stopped
 	dataPointProcessingWg := sync.WaitGroup{}
@@ -150,6 +153,7 @@ func main() {
 	startTime := time.Now()
 	for client_id := 0; uint64(client_id) < *clients; client_id++ {
 		wg.Add(1)
+		wgInFlight[client_id] = sync.WaitGroup{}
 		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
 		// Given the total commands might not be divisible by the #clients
 		// the last client will send the remainder commands to match the desired request count.
@@ -157,7 +161,7 @@ func main() {
 		if uint64(client_id) == (*clients - uint64(1)) {
 			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
 		}
-		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, *useWaitOnWrites, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, *useWaitOnWrites, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann, &wgInFlight[client_id])
 	}
 
 	// enter the update loopupdateCLIupdateCLI

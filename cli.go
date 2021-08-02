@@ -52,7 +52,7 @@ func renderTable(queries []string, writer *os.File, tableTitle string, includeCa
 	if includeErrors {
 		initialHeader = append(initialHeader, "Total Errors")
 	}
-	initialHeader = append(initialHeader, "Avg. latency(ms)", "p50 latency(ms)", "p95 latency(ms)", "p99 latency(ms)")
+	initialHeader = append(initialHeader, "Avg. lat.(ms)", "p50 lat.(ms)", "p75 lat.(ms)", "p95 lat.(ms)", "p99 lat.(ms)", "max lat.(ms)")
 	table.SetHeader(initialHeader)
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	table.SetCenterSeparator("|")
@@ -61,23 +61,28 @@ func renderTable(queries []string, writer *os.File, tableTitle string, includeCa
 }
 func renderGraphInternalExecutionTimeTable(queries []string, writer *os.File, tableTitle string, detailedHistogram []*hdrhistogram.Histogram, overallHistogram *hdrhistogram.Histogram) {
 	fmt.Fprintf(writer, tableTitle)
-	initialHeader := []string{"Query", " Internal Avg. latency(ms)", "Internal p50 latency(ms)", "Internal p95 latency(ms)", "Internal p99 latency(ms)"}
+	initialHeader := []string{"Query", " Internal Avg. lat.(ms)", "Internal p50 lat.(ms)", "Internal p75 lat.(ms)", "Internal p95 lat.(ms)", "Internal p99 lat.(ms)", "Internal max lat.(ms)"}
 	data := make([][]string, len(queries)+1)
 	i := 0
 	for i = 0; i < len(queries); i++ {
-		data[i] = make([]string, 5)
+		data[i] = make([]string, 7)
 		data[i][0] = queries[i]
 		data[i][1] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].Mean()/1000.0))
 		data[i][2] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(50.0))/1000.0)
-		data[i][3] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(95.0))/1000.0)
-		data[i][4] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(99.0))/1000.0)
+		data[i][3] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(75.0))/1000.0)
+		data[i][4] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(95.0))/1000.0)
+		data[i][5] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(99.0))/1000.0)
+		data[i][6] = fmt.Sprintf("%.3f", float64(detailedHistogram[i].ValueAtQuantile(100.0))/1000.0)
+
 	}
-	data[i] = make([]string, 5)
+	data[i] = make([]string, 7)
 	data[i][0] = "Total"
 	data[i][1] = fmt.Sprintf("%.3f", float64(overallHistogram.Mean()/1000.0))
 	data[i][2] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(50.0))/1000.0)
-	data[i][3] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(95.0))/1000.0)
-	data[i][4] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(99.0))/1000.0)
+	data[i][3] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(75.0))/1000.0)
+	data[i][4] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(95.0))/1000.0)
+	data[i][5] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(99.0))/1000.0)
+	data[i][6] = fmt.Sprintf("%.3f", float64(overallHistogram.ValueAtQuantile(100.0))/1000.0)
 	table := tablewriter.NewWriter(writer)
 	table.SetHeader(initialHeader)
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
@@ -87,7 +92,7 @@ func renderGraphInternalExecutionTimeTable(queries []string, writer *os.File, ta
 }
 
 func insertTableLine(queryName string, data [][]string, i int, includeCalls, includeErrors bool, errorsSlice []uint64, duration time.Duration, histogram *hdrhistogram.Histogram) {
-	data[i] = make([]string, 5)
+	data[i] = make([]string, 7)
 	latencyPadding := 0
 	data[i][0] = queryName
 	if includeCalls {
@@ -113,8 +118,10 @@ func insertTableLine(queryName string, data [][]string, i int, includeCalls, inc
 	}
 	data[i][1+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.Mean()/1000.0))
 	data[i][2+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(50.0))/1000.0)
-	data[i][3+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(95.0))/1000.0)
-	data[i][4+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(99.0))/1000.0)
+	data[i][3+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(75.0))/1000.0)
+	data[i][4+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(95.0))/1000.0)
+	data[i][5+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(99.0))/1000.0)
+	data[i][6+latencyPadding] = fmt.Sprintf("%.3f", float64(histogram.ValueAtQuantile(100.0))/1000.0)
 }
 
 func renderGraphResultSetTable(queries []string, writer *os.File, tableTitle string) {

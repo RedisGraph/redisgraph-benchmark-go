@@ -11,15 +11,17 @@ import (
 	"time"
 )
 
-func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, useWait bool, commandIsRO []bool, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func ingestionRoutine(rg *redisgraph.Graph, continueOnError bool, cmdS []string, useWait bool, commandIsRO []bool, commandsCDF []float32, randomIntPadding, randomIntMax int64, number_samples uint64, loop bool, debug_level int, wg *sync.WaitGroup, useLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint, wgInFlight *sync.WaitGroup) {
 	defer wg.Done()
 	for i := 0; uint64(i) < number_samples || loop; i++ {
 		cmdPos := sample(commandsCDF)
-		sendCmdLogic(rg, cmdS[cmdPos], useWait, commandIsRO[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel)
+		if !sendCmdLogic(rg, cmdS[cmdPos], useWait, commandIsRO[cmdPos], randomIntPadding, randomIntMax, cmdPos, continueOnError, debug_level, useLimiter, rateLimiter, statsChannel, wgInFlight) {
+			return
+		}
 	}
 }
 
-func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint) {
+func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, randomIntPadding, randomIntMax int64, cmdPos int, continueOnError bool, debug_level int, useRateLimiter bool, rateLimiter *rate.Limiter, statsChannel chan GraphQueryDatapoint, wgInFlight *sync.WaitGroup) bool {
 	if useRateLimiter {
 		r := rateLimiter.ReserveN(time.Now(), int(1))
 		time.Sleep(r.Delay())
@@ -27,6 +29,7 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, ra
 	var err error
 	var queryResult *redisgraph.QueryResult
 	processedQuery := processQuery(query, randomIntPadding, randomIntMax)
+	wgInFlight.Add(1)
 	startT := time.Now()
 	if readOnly {
 		queryResult, err = rg.ROQuery(processedQuery)
@@ -60,7 +63,9 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, ra
 				log.Println(fmt.Sprintf("Received an error with the following query(s): %v, error: %v", query, err))
 			}
 		} else {
-			log.Fatalf("Received an error with the following query(s): %v, error: %v", query, err)
+			log.Println(fmt.Sprintf("Received an error with the following query(s): %v, error: %v", query, err))
+			wgInFlight.Done()
+			return false
 		}
 	} else {
 		datapoint.GraphInternalDurationMicros = int64(queryResult.InternalExecutionTime() * 1000.0)
@@ -79,6 +84,8 @@ func sendCmdLogic(rg *redisgraph.Graph, query string, useWait, readOnly bool, ra
 		datapoint.RelationshipsDeleted = uint64(queryResult.RelationshipsDeleted())
 	}
 	statsChannel <- datapoint
+	wgInFlight.Done()
+	return true
 }
 
 func processQuery(query string, randomIntPadding int64, randomIntMax int64) string {
