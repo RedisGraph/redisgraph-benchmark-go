@@ -41,6 +41,7 @@ var clientSide_AllQueries_InstantLatencies *hdrhistogram.Histogram
 var serverSide_AllQueries_GraphInternalTime_InstantLatencies *hdrhistogram.Histogram
 
 var benchmarkQueries arrayStringParameters
+var benchmarkQueriesRO arrayStringParameters
 var benchmarkQueryRates arrayStringParameters
 
 const Inf = rate.Limit(math.MaxFloat64)

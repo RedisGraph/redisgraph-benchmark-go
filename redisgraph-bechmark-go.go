@@ -28,8 +28,9 @@ func main() {
 	randomIntMin := flag.Int64("random-int-min", 1, "__rand_int__ lower value limit. __rand_int__ distribution is uniform Random")
 	randomIntMax := flag.Int64("random-int-max", 1000000, "__rand_int__ upper value limit. __rand_int__ distribution is uniform Random")
 	graphKey := flag.String("graph-key", "graph", "graph key.")
-	flag.Var(&benchmarkQueries, "query", "Specify a RedisGraph query to send in quotes. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=2")
-	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=10 -query=\"MATCH (n) RETURN n\" -query-ratio=1")
+	flag.Var(&benchmarkQueries, "query", "Specify a RedisGraph query to send in quotes. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=1")
+	flag.Var(&benchmarkQueriesRO, "query-ro", "Specify a RedisGraph read-only query to send in quotes. You can run multiple commands (both read/write) on the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=0.5 -query-ro=\"MATCH (n) RETURN n\" -query-ratio=0.5")
+	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=0.5 -query=\"MATCH (n) RETURN n\" -query-ratio=0.5")
 	jsonOutputFile := flag.String("json-out-file", "benchmark-results.json", "Name of json output file to output benchmark results. If not set, will not print to json.")
 	cliUpdateTick := flag.Duration("reporting-period", time.Second*10, "Period to report stats.")
 	// data sink
@@ -98,9 +99,20 @@ func main() {
 	} else {
 		log.Printf("Running in loop until you hit Ctrl+C\n")
 	}
-	queries := make([]string, len(benchmarkQueries))
-	cmdRates := make([]float64, len(benchmarkQueries))
-	totalDifferentCommands, cdf := prepareCommandsDistribution(queries, cmdRates)
+	queries := make([]string, len(benchmarkQueries)+len(benchmarkQueriesRO))
+	queryIsReadOnly := make([]bool, len(benchmarkQueries)+len(benchmarkQueriesRO))
+	cmdRates := make([]float64, len(benchmarkQueries)+len(benchmarkQueriesRO))
+	readAndWriteQueries := append(benchmarkQueries, benchmarkQueriesRO...)
+
+	for i := 0; i < len(queries); i++ {
+		queryIsReadOnly[i] = false
+		// read-only queries are located after the read/write ones in queries
+		// so we start on len(benchmarkQueries) to tag them
+		if i >= len(benchmarkQueries) {
+			queryIsReadOnly[i] = true
+		}
+	}
+	totalDifferentCommands, cdf := prepareCommandsDistribution(readAndWriteQueries, queries, cmdRates)
 
 	createRequiredGlobalStructs(totalDifferentCommands)
 
@@ -144,7 +156,7 @@ func main() {
 		if uint64(client_id) == (*clients - uint64(1)) {
 			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
 		}
-		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
 	}
 
 	// enter the update loopupdateCLIupdateCLI
