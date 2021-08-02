@@ -15,7 +15,7 @@ jobs:
       - checkout
       - run: make test
       - run: make flow-test
-      - run: bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-action/master/codecov)
+      - run: bash <(curl -s https://raw.githubusercontent.com/codecov/codecov-bash/master/codecov)
       
 workflows:
   version: 2
