@@ -65,4 +65,14 @@ flow-test: build-race
 release:
 	$(GOGET) github.com/mitchellh/gox
 	$(GOGET) github.com/tcnksm/ghr
-	GO111MODULE=on gox  -osarch "linux/amd64 darwin/amd64" -output "dist/redisgraph-benchmark-go_{{.OS}}_{{.Arch}}" .
+	GO111MODULE=on gox  -osarch "linux/amd64 darwin/amd64" \
+	    -ldflags=$(LDFLAGS) \
+	    -output "${DISTDIR}/redisgraph-benchmark-go_{{.OS}}_{{.Arch}}" .
+
+
+publish: release
+	@for f in $(shell ls ${DISTDIR}); \
+	do \
+	echo "copying ${DISTDIR}/$${f}"; \
+	aws s3 cp ${DISTDIR}/$${f} s3://benchmarks.redislabs/redisgraph/tools/redisgraph-benchmark-go/$${f} --acl public-read; \
+	done
