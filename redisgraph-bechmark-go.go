@@ -19,6 +19,7 @@ import (
 func main() {
 	host := flag.String("h", "127.0.0.1", "Server hostname.")
 	port := flag.Int("p", 6379, "Server port.")
+	tlsCaCertFile := flag.String("tls-ca-cert-file", "", "A PEM encoded CA's certificate file.")
 	rps := flag.Int64("rps", 0, "Max rps. If 0 no limit is applied and the DB is stressed up to maximum.")
 	password := flag.String("a", "", "Password for Redis Auth.")
 	clients := flag.Uint64("c", 50, "number of clients.")
@@ -47,6 +48,7 @@ func main() {
 	var loop *bool = &loopV
 	version := flag.Bool("v", false, "Output version and exit")
 	flag.Parse()
+
 	git_sha := toolGitSHA1()
 	git_dirty_str := ""
 	if toolGitDirty() {
@@ -134,7 +136,7 @@ func main() {
 	c1 := make(chan os.Signal, 1)
 	signal.Notify(c1, os.Interrupt)
 
-	graphC, _ := getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
+	graphC, _ := getStandaloneConn(*graphKey, "tcp", connectionStr, *password, *tlsCaCertFile)
 	log.Printf("Trying to extract RedisGraph version info\n")
 
 	redisgraphVersion, err := getRedisGraphVersion(graphC)
@@ -153,8 +155,7 @@ func main() {
 	startTime := time.Now()
 	for client_id := 0; uint64(client_id) < *clients; client_id++ {
 		wg.Add(1)
-		wgInFlight[client_id] = sync.WaitGroup{}
-		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password)
+		rgs[client_id], conns[client_id] = getStandaloneConn(*graphKey, "tcp", connectionStr, *password, *tlsCaCertFile)
 		// Given the total commands might not be divisible by the #clients
 		// the last client will send the remainder commands to match the desired request count.
 		// It's OK to alter clientTotalCmds given this is the last time we use it's value
