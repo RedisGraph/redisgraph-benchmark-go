@@ -178,8 +178,13 @@ func main() {
 	testResult.FillDurationInfo(startTime, endTime, duration)
 	testResult.BenchmarkFullyRun = totalCommands == *numberRequests
 	testResult.IssuedCommands = totalCommands
-	testResult.OverallGraphInternalLatencies = GetOverallLatencies(queries, serverSide_PerQuery_GraphInternalTime_OverallLatencies, serverSide_AllQueries_GraphInternalTime_OverallLatencies)
-	testResult.OverallClientLatencies = GetOverallLatencies(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
+	overallGraphInternalLatencies, internalLatencyMap := GetOverallLatencies(queries, serverSide_PerQuery_GraphInternalTime_OverallLatencies, serverSide_AllQueries_GraphInternalTime_OverallLatencies)
+	overallClientLatencies, clientLatencyMap := GetOverallLatencies(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
+	relativeLatencyDiff, absoluteLatencyDiff := GenerateInternalExternalRatioLatencies(internalLatencyMap, clientLatencyMap)
+	testResult.OverallClientLatencies = overallClientLatencies
+	testResult.OverallGraphInternalLatencies = overallGraphInternalLatencies
+	testResult.AbsoluteInternalExternalLatencyDiff = absoluteLatencyDiff
+	testResult.RelativeInternalExternalLatencyDiff = relativeLatencyDiff
 	testResult.OverallQueryRates = GetOverallRatesMap(duration, queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies)
 	testResult.DBSpecificConfigs = GetDBConfigsMap(redisgraphVersion)
 	testResult.Totals = GetTotalsMap(queries, clientSide_PerQuery_OverallLatencies, clientSide_AllQueries_OverallLatencies, errorsPerQuery, totalNodesCreatedPerQuery, totalNodesDeletedPerQuery, totalLabelsAddedPerQuery, totalPropertiesSetPerQuery, totalRelationshipsCreatedPerQuery, totalRelationshipsDeletedPerQuery)
