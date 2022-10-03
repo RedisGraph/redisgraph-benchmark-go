@@ -6,6 +6,7 @@ import (
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -62,6 +63,12 @@ type TestResult struct {
 
 	// Overall Graph Internal Quantiles
 	OverallGraphInternalLatencies map[string]interface{} `json:"OverallGraphInternalLatencies"`
+
+	// Relative Internal External Latencies Differences
+	RelativeInternalExternalLatencyDiff map[string]float64 `json:"OverallRelativeInternalExternalLatencyDiff"`
+
+	// Relative Internal External Latencies Differences
+	AbsoluteInternalExternalLatencyDiff map[string]float64 `json:"OverallAbsoluteInternalExternalLatencyDiff"`
 
 	// Per second ( tick ) client stats
 	ClientRunTimeStats map[int64]interface{} `json:"ClientRunTimeStats"`
@@ -188,7 +195,7 @@ func generateLatenciesMap(hist *hdrhistogram.Histogram) (int64, map[string]float
 	return ops, mp
 }
 
-func GetOverallLatencies(cmds []string, perQueryHistograms []*hdrhistogram.Histogram, totalsHistogram *hdrhistogram.Histogram) map[string]interface{} {
+func GetOverallLatencies(cmds []string, perQueryHistograms []*hdrhistogram.Histogram, totalsHistogram *hdrhistogram.Histogram) (map[string]interface{}, map[string]float64) {
 	perQueryQuantileMap := map[string]interface{}{}
 	for i, query := range cmds {
 		_, quantileMap := generateLatenciesMap(perQueryHistograms[i])
@@ -196,7 +203,25 @@ func GetOverallLatencies(cmds []string, perQueryHistograms []*hdrhistogram.Histo
 	}
 	_, totalMap := generateLatenciesMap(totalsHistogram)
 	perQueryQuantileMap["Total"] = totalMap
-	return perQueryQuantileMap
+	return perQueryQuantileMap, totalMap
+}
+
+func GenerateInternalExternalRatioLatencies(internal map[string]float64, external map[string]float64) (ratioMap map[string]float64, absoluteMap map[string]float64) {
+	ratioMap = map[string]float64{}
+	absoluteMap = map[string]float64{}
+	for quantile, internalQuantileValue := range internal {
+
+		externalQuantileValue := external[quantile]
+		absoluteDiff := externalQuantileValue - internalQuantileValue
+		relativeDiff := externalQuantileValue / internalQuantileValue
+		if !math.IsNaN(relativeDiff) {
+			ratioMap[quantile] = relativeDiff
+		}
+		if !math.IsNaN(absoluteDiff) {
+			absoluteMap[quantile] = absoluteDiff
+		}
+	}
+	return
 }
 
 func GetOverallRatesMap(took time.Duration, cmds []string, perQueryHistograms []*hdrhistogram.Histogram, totalsHistogram *hdrhistogram.Histogram) map[string]interface{} {
