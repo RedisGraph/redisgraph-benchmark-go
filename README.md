@@ -10,7 +10,33 @@ This repo contains code to quick benchmark RedisGraph, using the official [redis
 
 ## Installation
 
-The easiest way to get and install the redisgraph-benchmark-go Go program is to use
+### Download Standalone binaries ( no Golang needed )
+
+If you don't have go on your machine and just want to use the produced binaries you can download the following prebuilt bins:
+
+https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest
+
+| OS | Arch | Link |
+| :---         |     :---:      |          ---: |
+| Linux   | amd64  (64-bit X86)     | [redisgraph-benchmark-go-linux-amd64](https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest/download/redisgraph-benchmark-go-linux-amd64.tar.gz)    |
+| Linux   | arm64 (64-bit ARM)     | [redisgraph-benchmark-go-linux-arm64](https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest/download/redisgraph-benchmark-go-linux-arm64.tar.gz)    |
+| Darwin   | amd64  (64-bit X86)     | [redisgraph-benchmark-go-darwin-amd64](https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest/download/redisgraph-benchmark-go-darwin-amd64.tar.gz)    |
+| Darwin   | arm64 (64-bit ARM)     | [redisgraph-benchmark-go-darwin-arm64](https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest/download/redisgraph-benchmark-go-darwin-arm64.tar.gz)    |
+
+Here's how bash script to download and try it:
+
+```bash
+wget -c https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest/download/redisgraph-benchmark-go-$(uname -mrs | awk '{ print tolower($1) }')-$(dpkg --print-architecture).tar.gz -O - | tar -xz
+
+# give it a try
+./redisgraph-benchmark-go --help
+```
+
+
+### Installation in a Golang env
+
+To install the benchmark utility with a Go Env do as follow:
+
 `go get` and then `go install`:
 ```bash
 # Fetch this repo
