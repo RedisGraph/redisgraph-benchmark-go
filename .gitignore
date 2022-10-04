@@ -22,8 +22,6 @@ coverage.txt
 # Dist binaries
 dist/
 
-# Go sum
-go.sum
 
 # IDE
 .idea
