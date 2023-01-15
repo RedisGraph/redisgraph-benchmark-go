@@ -36,7 +36,7 @@ func main() {
 	flag.Var(&benchmarkQueriesRO, "query-ro", "Specify a RedisGraph read-only query to send in quotes. You can run multiple commands (both read/write) on the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=0.5 -query-ro=\"MATCH (n) RETURN n\" -query-ratio=0.5")
 	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=0.5 -query=\"MATCH (n) RETURN n\" -query-ratio=0.5")
 	jsonOutputFile := flag.String("json-out-file", "benchmark-results.json", "Name of json output file to output benchmark results. If not set, will not print to json.")
-	cliUpdateTick := flag.Duration("reporting-period", time.Second*10, "Period to report stats.")
+	cliUpdateTick := flag.Duration("reporting-period", time.Second*5, "Period to report stats.")
 	// data sink
 	runName := flag.String("exporter-run-name", "perf-run", "Run name.")
 	rtsHost := flag.String("exporter-rts-host", "127.0.0.1", "RedisTimeSeries hostname.")
