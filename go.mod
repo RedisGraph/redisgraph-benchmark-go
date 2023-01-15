@@ -11,4 +11,7 @@ require (
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324
 )
 
-require github.com/mattn/go-runewidth v0.0.7 // indirect
+require (
+	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/mattn/go-runewidth v0.0.7 // indirect
+)
