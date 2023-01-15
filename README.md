@@ -3,6 +3,7 @@
 [![license](https://img.shields.io/github/license/RedisGraph/redisgraph-benchmark-go.svg)](https://github.com/RedisGraph/redisgraph-benchmark-go)
 [![GitHub issues](https://img.shields.io/github/release/RedisGraph/redisgraph-benchmark-go.svg)](https://github.com/RedisGraph/redisgraph-benchmark-go/releases/latest)
 [![Discord](https://img.shields.io/discord/697882427875393627?style=flat-square)](https://discord.gg/gWBRT6P)
+[![codecov](https://codecov.io/github/RedisGraph/redisgraph-benchmark-go/branch/main/graph/badge.svg?token=B6ISQSDK3Y)](https://codecov.io/github/RedisGraph/redisgraph-benchmark-go)
 
 ## Overview
 
