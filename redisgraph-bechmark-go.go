@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"github.com/RedisGraph/redisgraph-go"
@@ -26,6 +27,8 @@ func main() {
 	numberRequests := flag.Uint64("n", 1000000, "Total number of requests")
 	debug := flag.Int("debug", 0, "Client debug level.")
 	randomSeed := flag.Int64("random-seed", 12345, "Random seed to use.")
+	dataImportFile := flag.String("data-import-terms", "", "Read field replacement data from file in csv format. each column should start and end with '__' chars. Example __field1__,__field2__.")
+	dataImportMode := flag.String("data-import-terms-mode", "seq", "Either 'seq' or 'rand'.")
 	randomIntMin := flag.Int64("random-int-min", 1, "__rand_int__ lower value limit. __rand_int__ distribution is uniform Random")
 	randomIntMax := flag.Int64("random-int-max", 1000000, "__rand_int__ upper value limit. __rand_int__ distribution is uniform Random")
 	graphKey := flag.String("graph-key", "graph", "graph key.")
@@ -33,7 +36,7 @@ func main() {
 	flag.Var(&benchmarkQueriesRO, "query-ro", "Specify a RedisGraph read-only query to send in quotes. You can run multiple commands (both read/write) on the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=0.5 -query-ro=\"MATCH (n) RETURN n\" -query-ratio=0.5")
 	flag.Var(&benchmarkQueryRates, "query-ratio", "The query ratio vs other queries used in the same benchmark. Each command that you specify is run with its ratio. For example: -query=\"CREATE (n)\" -query-ratio=0.5 -query=\"MATCH (n) RETURN n\" -query-ratio=0.5")
 	jsonOutputFile := flag.String("json-out-file", "benchmark-results.json", "Name of json output file to output benchmark results. If not set, will not print to json.")
-	cliUpdateTick := flag.Duration("reporting-period", time.Second*10, "Period to report stats.")
+	cliUpdateTick := flag.Duration("reporting-period", time.Second*5, "Period to report stats.")
 	// data sink
 	runName := flag.String("exporter-run-name", "perf-run", "Run name.")
 	rtsHost := flag.String("exporter-rts-host", "127.0.0.1", "RedisTimeSeries hostname.")
@@ -101,9 +104,46 @@ func main() {
 	} else {
 		log.Printf("Running in loop until you hit Ctrl+C\n")
 	}
-	queries := make([]string, len(benchmarkQueries)+len(benchmarkQueriesRO))
-	queryIsReadOnly := make([]bool, len(benchmarkQueries)+len(benchmarkQueriesRO))
-	cmdRates := make([]float64, len(benchmarkQueries)+len(benchmarkQueriesRO))
+	totalQueries := len(benchmarkQueries) + len(benchmarkQueriesRO)
+	queries := make([]string, totalQueries)
+	queryIsReadOnly := make([]bool, totalQueries)
+	cmdRates := make([]float64, totalQueries)
+	var replacementArr []map[string]string
+	dataReplacementEnabled := false
+	if *dataImportFile != "" {
+		log.Printf("Reading term data import file from: %s. Using '%s' record read mode.\n", *dataImportFile, *dataImportMode)
+		dataReplacementEnabled = true
+		replacementArr = make([]map[string]string, 0)
+
+		f, err := os.Open(*dataImportFile)
+		if err != nil {
+			log.Fatal("Unable to read input file "+*dataImportFile, err)
+		}
+		defer f.Close()
+
+		csvReader := csv.NewReader(f)
+		records, err := csvReader.ReadAll()
+		headers := records[0]
+		rlen := len(records) - 1
+		for i := 0; i < int(*numberRequests); i++ {
+			// seq mode
+			recordPos := i % rlen
+			if strings.Compare(*dataImportMode, "rand") == 0 {
+				recordPos = rand.Intn(rlen)
+			}
+			record := records[recordPos+1]
+			lineMap := make(map[string]string)
+			for j := 0; j < len(headers); j++ {
+				lineMap[headers[j]] = record[j]
+			}
+			replacementArr = append(replacementArr, lineMap)
+		}
+		if err != nil {
+			log.Fatal("Unable to parse file as CSV for "+*dataImportFile, err)
+		}
+		log.Printf("There are a total of %d disticint lines of terms. Each line has %d columns. Prepared %d groups of records for the benchmark.\n", rlen, len(headers), len(replacementArr))
+
+	}
 	readAndWriteQueries := append(benchmarkQueries, benchmarkQueriesRO...)
 
 	for i := 0; i < len(queries); i++ {
@@ -158,7 +198,8 @@ func main() {
 		if uint64(client_id) == (*clients - uint64(1)) {
 			clientTotalCmds = samplesPerClientRemainder + samplesPerClient
 		}
-		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann)
+		cmdStartPos := uint64(client_id) * samplesPerClient
+		go ingestionRoutine(&rgs[client_id], *continueOnError, queries, queryIsReadOnly, cdf, *randomIntMin, randLimit, clientTotalCmds, *loop, *debug, &wg, useRateLimiter, rateLimiter, graphDatapointsChann, dataReplacementEnabled, replacementArr, cmdStartPos)
 	}
 
 	// enter the update loopupdateCLIupdateCLI
