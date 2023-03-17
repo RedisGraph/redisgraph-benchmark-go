@@ -10,8 +10,11 @@ import (
 func sample(cdf []float32) int {
 	r := rand.Float32()
 	bucket := 0
-	for r > cdf[bucket] {
+	for (bucket < len(cdf)) && (r > cdf[bucket]) {
 		bucket++
+	}
+	if bucket >= len(cdf) {
+		bucket = bucket - 1
 	}
 	return bucket
 }
