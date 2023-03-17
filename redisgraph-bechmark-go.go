@@ -70,8 +70,9 @@ func main() {
 	} else {
 		log.Printf("RTS export disabled.\n")
 	}
-	if len(benchmarkQueries) < 1 {
-		log.Fatalf("You need to specify at least a query with the -query parameter. For example: -query=\"CREATE (n)\"")
+	totalQueries := len(benchmarkQueries) + len(benchmarkQueriesRO)
+	if totalQueries < 1 {
+		log.Fatalf("You need to specify at least a query with the -query parameter or -query-ro. For example: -query=\"CREATE (n)\"")
 	}
 	log.Printf("Debug level: %d.\n", *debug)
 	log.Printf("Using random seed: %d.\n", *randomSeed)
@@ -104,7 +105,7 @@ func main() {
 	} else {
 		log.Printf("Running in loop until you hit Ctrl+C\n")
 	}
-	totalQueries := len(benchmarkQueries) + len(benchmarkQueriesRO)
+
 	queries := make([]string, totalQueries)
 	queryIsReadOnly := make([]bool, totalQueries)
 	cmdRates := make([]float64, totalQueries)
